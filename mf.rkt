@@ -5,18 +5,38 @@
 
 
 (define (int r) (inexact->exact (round r)))
+(define (cycle-left-1 l)
+  (append (cdr l) (list (car l))))
+(define (cycle-right-1 l)
+  (cons (last l) (drop-right l 1)))
 (define (cycle-map f l)
   (map f (append (cdr l) (list (car l)))  l ))
 (define (cycle-map-minus l)
   (cycle-map - l))
+(define (rad-to-deg r)
+  (* 180 (/ r pi)))
 
+(define (index-of lst ele)
+  (let loop ((lst lst)
+             (idx 0))
+    (cond ((empty? lst) #f)
+          ((equal? (first lst) ele) idx)
+          (else (loop (rest lst) (add1 idx))))))
+
+(define (indexes-of lst ele)
+  (let loop ((lst lst)
+             (idx 0)
+             (res '()))
+    (cond ((empty? lst) res)
+          ((equal? (first lst) ele) (loop (rest lst) (add1 idx) (cons idx res)))
+          (else (loop (rest lst) (add1 idx) res)))))
 
 ;mf11
 
-;(define z1 100+100i)
-;(define z2 300+100i)
-;(define z3 200+200i)
-;(define z4 200+300i)
+;(define z1 100+200i)
+;(define z2 300+200i)
+;(define z3 200+300i)
+;(define z4 200+400i)
 ;(define knots 
 ;  (list z1 z2 z3 z4 z2 z1 z4 z3))
 ;  (list 100+100i 300+100i 300+200i))
@@ -35,21 +55,30 @@
 
 (define n (length knots))
 (define deltas (cycle-map-minus knots))
-(define psis 
-  (let ((l (cycle-map (lambda (d-k-k+1 d-k+1-k+2) (angle (/ d-k+1-k+2 d-k-k+1))) deltas)))
-    (cons (last l) (drop-right l 1))))
+(define psis
+  (map (lambda (d-k-1-k d-k-k+1) (angle (/ d-k-k+1 d-k-1-k)))
+       (cycle-right-1 deltas)
+       deltas))
+(define (mod-angle a)
+  (- a (round (/ a pi))))
 
 
 ;mf116
 (define (velocity theta phi)
-  (min 4.0
-        (+ 2.0
-           (* (sqrt 2) 
-              (- (sin theta) (/ (sin phi) 16)) 
-              (- (sin phi) (/ (sin theta) 16)) 
-              (- (cos theta) (cos phi))))
-        (* 3.0 (+ 1 (* 0.5 (- (sqrt 5) 1) (cos theta))
-                  (* 0.5 (- 3 (sqrt 5)) (cos phi))))))
+  (let ((ct (cos theta))
+        (st (sin theta))
+        (cf (cos phi))
+        (sf (sin phi))
+        (rt5 (sqrt 5)))
+    (min 4.0
+         (/ (+ 2.0
+               (* (sqrt 2) 
+                  (- st (/ sf 16)) 
+                  (- sf (/ st 16)) 
+                  (- ct cf)))
+            (+ 1 
+               (* 0.5 (- rt5 1) ct)
+               (* 0.5 (- 3 rt5) cf))))))
 
 (define (prev i)
   (modulo (sub1 i) n))
@@ -100,16 +129,16 @@
          (st (sin theta))
          (sf (sin phi)))
     (when (or (and (>= sf 0)
-                 (>= st 0))
-            (and (<= st 0)
-                 (<= sf 0)))
-        (let ((sine (+ (* (abs st) (cos phi)) (* (abs sf) (cos theta)))))
-          (when (and (> sine 0)
+                   (>= st 0))
+              (and (<= st 0)
+                   (<= sf 0)))
+      (let ((sine (+ (* (abs st) (cos phi)) (* (abs sf) (cos theta)))))
+        (when (and (> sine 0)
                    (< (abs sf) (* rr sine)))
-              (set! rr (/ (abs sf) sine)))))
+          (set! rr (/ (abs sf) sine)))))
     (+ (list-ref knots index)
        (* (list-ref deltas index)
-          (make-polar 1 (- theta))
+          (make-polar 1 theta)
           rr))))
 
 (define (left-control-point index)
@@ -119,16 +148,16 @@
          (st (sin theta))
          (sf (sin phi)))
     (when (or (and (>= sf 0)
-                 (>= st 0))
-            (and (<= st 0)
-                 (<= sf 0)))
-        (let ((sine (+ (* (abs st) (cos phi)) (* (abs sf) (cos theta)))))
-          (when (and (> sine 0)
+                   (>= st 0))
+              (and (<= st 0)
+                   (<= sf 0)))
+      (let ((sine (+ (* (abs st) (cos phi)) (* (abs sf) (cos theta)))))
+        (when (and (> sine 0)
                    (< (abs st) (* ss sine)))
-              (set! ss (/ (abs st) sine)))))
+          (set! ss (/ (abs st) sine)))))
     (- (list-ref knots index)
        (* (list-ref deltas (prev index))
-          (make-polar 1 (list-ref phis index))
+          (make-polar 1 (- phi))
           ss))))
 
 
@@ -155,13 +184,13 @@
 (define path (new z-path%))
 (send path z-move-to (car knots))
 (for ([i (range n)])
-;(for ([i (range 2)])
+  ;(for ([i (range 2)])
   
   (send path z-curve-to
-   (right-control-point i)
-   (left-control-point (next i))
-   (list-ref knots (next i))))
-        
+        (right-control-point i)
+        (left-control-point (next i))
+        (list-ref knots (next i))))
+
 (define frame (new frame%
                    [label "Example"]
                    [width 500]
@@ -170,5 +199,4 @@
   (new canvas% [parent frame]
        [paint-callback
         (lambda (canvas dc)
-                (send dc draw-path path))]))
-      
+          (send dc draw-path path))]))

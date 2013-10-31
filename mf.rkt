@@ -2,7 +2,7 @@
 (require racket/gui)
 (require racket/draw)
 (require math/matrix)
-
+(require rackunit)
 
 (define (int r) (inexact->exact (round r)))
 (define (cycle-left-1 l)
@@ -42,16 +42,58 @@
 ;  (list 100+100i 300+100i 300+200i))
 ;  (list 100+100i 300+100i))
 
-(define z1 100+200i)
-(define z2 200+100i)
-(define z3 200+300i)
-(define z4 300+200i)
-(define z5 400+100i)
-(define z6 400+300i)
-(define z7 500+200i)
+(struct path-node 
+  (z chord-left chord-right phi theta psi control-left control-right ) 
+  #:mutable)
+
+(define (path-node-angle pn)
+    (+ (angle (path-node-chord-right pn)) 
+       (path-node-theta pn)))
+ 
+(define (add-path-node-theta! pn d-theta)
+    (set-path-node-theta! pn (+ (path-node-theta pn) d-theta)))
+
+(struct knot-node (z first-path-node second-path-node) #:mutable)
+
+(define (make-cycle . knodes)
+  (define (add-node knode)
+    (let ((pnode (path-node (knot-node-z knode) '() '() '() '() '() '() '())))
+      (if (null? (knot-node-first-path-node knode))
+          (set-knot-node-first-path-node! knode pnode)
+          (set-knot-node-second-path-node! knode pnode))
+      pnode))
+  (map add-node knodes))
+    
+(define z1 (knot-node 100+200i '() '()))
+(define z2 (knot-node 200+100i '() '()))
+(define z3 (knot-node 200+300i '() '()))
+(define z4 (knot-node 300+200i '() '()))
+(define z5 (knot-node 400+100i '() '()))
+(define z6 (knot-node 400+300i '() '()))
+(define z7 (knot-node 500+200i '() '()))
+
+(define knot-nodes (list z1 z2 z3 z4 z5 z6 z7))
+
+(define cycle
+  (make-cycle z1 z2 z5 z7 z6 z4 z2 z1 z3 z6 z7 z5 z4 z3))
+
+(define (fill-up-chords cycle)
+  (let ((chords (map (lambda (pn1 pn2) (- (path-node-z pn2) (path-node-z pn1)))
+                     cycle
+                     (cycle-left-1 cycle))))
+    (map set-path-node-chord-right! cycle chords)
+    (map set-path-node-chord-left! cycle (cycle-right-1 chords))))
+
+(fill-up-chords cycle)
+(map (lambda (pn)
+       (set-path-node-psi! 
+        pn
+        (angle (/ (path-node-chord-right pn) (path-node-chord-left pn)))))
+     cycle)
+
 
 (define knots 
-  (list z1 z2 z5 z7 z6 z4 z2 z1 z3 z6 z7 z5 z4 z3))
+  (map knot-node-z (list z1 z2 z5 z7 z6 z4 z2 z1 z3 z6 z7 z5 z4 z3)))
 
 (define n (length knots))
 (define deltas (cycle-map-minus knots))
@@ -59,8 +101,10 @@
   (map (lambda (d-k-1-k d-k-k+1) (angle (/ d-k-k+1 d-k-1-k)))
        (cycle-right-1 deltas)
        deltas))
+(define (fmod x r)
+  (- x (* (round (/ x r)) r)))
 (define (mod-angle a)
-  (- a (round (/ a pi))))
+  (- a (* (round (/ a (* 2 pi))) (* 2 pi))))
 
 
 ;mf116
@@ -117,10 +161,48 @@
 (define thetas
   (matrix->list (matrix-solve mat right)))
 
+(map set-path-node-theta! cycle thetas)
+
+; modify thetas, so that the curve intersects itself orthogonaly at each point,
+; keeping the same bisector
+(define (tweak-angles angle1 angle2)
+  (let* ((offset (- angle2 angle1))
+         (target-offset (+ (/ pi 2) (* (floor (/ offset pi)) pi))))
+    (/ (- offset target-offset) 2)))
+
+(check-equal?
+ (+ -1.4 (tweak-angles -1.4 1.4))
+ (- (/ pi 4)))
+
+(check-equal?
+ (+ -1.450515964828205 (tweak-angles -1.450515964828205 1.450515964828205))
+ (- (/ pi 4)))
+
+(check-equal?
+ (+ 1.4 (tweak-angles 1.4 -1.4))
+ (/ pi 4))
+
+(check-equal?
+ (< (tweak-angles -0.3345558925337896 3.288158208922769)  0 )
+ #true)
+
+(define (knot-node-tweak-thetas kn)
+  (let* ((pn1 (knot-node-first-path-node kn))
+         (pn2 (knot-node-second-path-node kn))
+         (tweak (tweak-angles  (path-node-angle pn1) (path-node-angle pn2))))
+    (add-path-node-theta! pn1 (+ tweak))
+    (add-path-node-theta! pn2 (- tweak))))
+
+(map knot-node-tweak-thetas knot-nodes)
+
+(set! thetas (map path-node-theta cycle))
+
 (define phis
   (map (lambda (theta psi) (- 0 theta psi))
        thetas
        psis))
+
+(map set-path-node-phi! cycle phis)
 
 (define (right-control-point index)
   (let* ((theta (list-ref thetas index))
@@ -128,14 +210,14 @@
          (rr (/ (velocity theta phi) 3))
          (st (sin theta))
          (sf (sin phi)))
-    (when (or (and (>= sf 0)
-                   (>= st 0))
-              (and (<= st 0)
-                   (<= sf 0)))
-      (let ((sine (+ (* (abs st) (cos phi)) (* (abs sf) (cos theta)))))
-        (when (and (> sine 0)
-                   (< (abs sf) (* rr sine)))
-          (set! rr (/ (abs sf) sine)))))
+;    (when (or (and (>= sf 0)
+;                   (>= st 0))
+;              (and (<= st 0)
+;                   (<= sf 0)))
+;      (let ((sine (+ (* (abs st) (cos phi)) (* (abs sf) (cos theta)))))
+;        (when (and (> sine 0)
+;                   (< (abs sf) (* rr sine)))
+;          (set! rr (/ (abs sf) sine)))))
     (+ (list-ref knots index)
        (* (list-ref deltas index)
           (make-polar 1 theta)
@@ -147,14 +229,14 @@
          (ss (/ (velocity phi theta) 3))
          (st (sin theta))
          (sf (sin phi)))
-    (when (or (and (>= sf 0)
-                   (>= st 0))
-              (and (<= st 0)
-                   (<= sf 0)))
-      (let ((sine (+ (* (abs st) (cos phi)) (* (abs sf) (cos theta)))))
-        (when (and (> sine 0)
-                   (< (abs st) (* ss sine)))
-          (set! ss (/ (abs st) sine)))))
+;    (when (or (and (>= sf 0)
+;                   (>= st 0))
+;              (and (<= st 0)
+;                   (<= sf 0)))
+;      (let ((sine (+ (* (abs st) (cos phi)) (* (abs sf) (cos theta)))))
+;        (when (and (> sine 0)
+;                   (< (abs st) (* ss sine)))
+;          (set! ss (/ (abs st) sine)))))
     (- (list-ref knots index)
        (* (list-ref deltas (prev index))
           (make-polar 1 (- phi))

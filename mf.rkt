@@ -266,8 +266,6 @@
 (define path (new z-path%))
 (send path z-move-to (car knots))
 (for ([i (range n)])
-  ;(for ([i (range 2)])
-  
   (send path z-curve-to
         (right-control-point i)
         (left-control-point (next i))
@@ -282,3 +280,50 @@
        [paint-callback
         (lambda (canvas dc)
           (send dc draw-path path))]))
+
+(define (get-path-node kn angle)
+  (let* ((pn1 (get-knot-node-first-path-node kn))
+	 (theta1 (get-path-node-theta pn1))
+	 (pn2 (get-knot-node-second-path-node kn))
+	 (theta2 (get-path-node-theta pn2)))
+    (if (< (abs (cos (- angle theta1)))
+	   (abs (cos (- angle theta2))))
+	pn2
+	pn1)))
+
+	     
+
+(define (minf l f)
+  (define (aux l f val res)
+    (if (null? l)
+	res
+	(let ((valcar (f (car l))))
+	  (if (< val valcar)
+	      (aux (cdr l) f val res)
+	      (aux (cdr l) f valcar (car l))))))
+  (aux l f +inf.0 '()))
+
+(define get-nearest-node x y
+  (minf knots 
+	(lambda (z) (magnitude (- z (make-rectangular x y))))))
+(define kg-canvas%
+  (class canvas%
+     (super-new)
+     (define/override (on-event event)
+       (let ((event-type (send event get-event-type)))
+	 (case event-type
+	   ('left-down (set! x (send event get-x))
+		       (set! y (send event get-y))
+		       (set! node (get-nearest-node x y)))
+	   ('left-up
+	    (let ((mouse-z (make-rectangular
+			    (send event get-x)
+			    (send event get-y))))
+	      (when (equal? node 
+			    (get-nearest-node 
+			     (send event get-x)
+			     (send event get-y)))
+		    (get-path-node node 
+				   (angle (- mouse-z
+					     (make-rectangular x y))))))))))))
+))

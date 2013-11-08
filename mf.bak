@@ -4,20 +4,11 @@
 (require math/matrix)
 (require rackunit)
 
-(define (changef l pred new)
-  (cond ((null? l)'())
-        ((pred (car l)) (cons new (cdr l)))
-        (else l)))
-
-
-(define (transpose-lists lists) (apply map list lists))
 (define (int r) (inexact->exact (round r)))
 (define (cycle-left-1 l)
   (append (cdr l) (list (car l))))
-(define left-cycle-1 cycle-left-1)
 (define (cycle-right-1 l)
   (cons (last l) (drop-right l 1)))
-(define right-cycle-1 cycle-left-1)
 (define (cycle-map f l)
   (map f (append (cdr l) (list (car l)))  l ))
 (define (cycle-map-minus l)
@@ -53,7 +44,7 @@
 
 (struct path-node 
   (z chord-left chord-right psi theta phi control-left control-right )
-  #:mutable #:transparent)
+  #:mutable)
 
 (define (path-node-angle pn)
     (+ (angle (path-node-chord-right pn)) 
@@ -62,124 +53,7 @@
 (define (add-path-node-theta! pn d-theta)
     (set-path-node-theta! pn (+ (path-node-theta pn) d-theta)))
 
-(struct knot-node (z first-path-node second-path-node) #:mutable #:transparent)
-
-(struct knot (knot-nodes path-nodes) #:transparent)
-
-(define (make-knot . points)
-  (define (aux points path knot-nodes)
-    (if (null? points)
-        (knot knot-nodes (reverse path))
-        (let* ((z (car points))
-               (pn-found (findf (lambda (pn) (equal? z (path-node-z pn))) path))
-               (new-pn  (path-node z '() '() '() '() '() '() '())))
-          (aux (cdr points)
-               (cons new-pn path)
-               (if pn-found 
-                   (cons (knot-node z pn-found new-pn) knot-nodes)
-                   knot-nodes)))))
-  (aux points '() '()))
-
-(define (turnAngle chord1 chord2)
-  (angle (/ chord2 chord1)))
-
-(define (knot-matrix chords)
-  ;mf276
-  (define (A i j)
-    (if (not (eq? j (prev i)))
-        0
-        (/ 1 (magnitude (list-ref chords j)))))
-  (define (B+C i j)
-    (if (not (eq? i j))
-        0
-        (+ (/ 2 (magnitude (list-ref chords (prev i))))
-           (/ 2 (magnitude (list-ref chords i))))))
-  (define (D i j)
-    (if (not (eq? j (next i)))
-        0
-        (/ 1 (magnitude (list-ref chords i)))))
-  (let ((n (length chords)))
-    (build-matrix 
-     n n
-     (lambda (i j) (+ (A i j) (B+C i j) (D i j))))))
-
-(define (knot-right-vector chords turnAngles)
-  (build-matrix 
-   n 1
-   (lambda (i j) 
-     (- 0
-        (* (/ 2 (magnitude (list-ref chords (prev i)))) 
-           (list-ref turnAngles i))
-        (* (/ 1 (magnitude (list-ref chords i))) 
-           (list-ref turnAngles (next i)))))))
-
-(define (right-control-point point chord theta phi)
-  (+ point
-     (* chord
-        (make-polar 1 theta)
-        (/ (velocity theta phi) 3))))
-
-(define (left-control-point point chord theta phi)
-  (- point
-     (* chord
-        (make-polar 1 (- phi))
-        (/ (velocity phi theta) 3))))
-
-
-(define (knot-path . points)
-  (let* ((chords (cycle-map-minus points))
-         (turnAngles (map turnAngle (cycle-right-1 chords) chords))
-         (orig-thetas (matrix->list 
-                       (matrix-solve 
-                        (knot-matrix chords)
-                        (knot-right-vector chords turnAngles))))
-         (thetas (knot-tweak-thetas points orig-thetas))
-         (phis (map (lambda (theta psi) (- 0 theta psi))
-                    thetas
-                    turnAngles))
-         (z-path (new z-path%)))
-    (send z-path z-move-to (car points))
-    (map (lambda (zk+ zk+1- zk+1)
-           (send z-path z-curve-to zk+ zk+1- zk+1))
-         (map right-control-point points thetas (left-cycle-1 phis)
-         (left-cycle-1 (map left-control-point points (right-cycle-1 thetas) phis))
-         (left-cycle-1 points)))
-    z-path))
-
-(define (knot-tweak-thetas zs thetas)
-  (define (cons-knot z theta aknot)
-    (let ((pn-found (findf (lambda (pn) (equal? z (path-node-z pn))) 
-                           (knot-path-nodes aknot)))
-          (new-pn (path-node z '() '() '() theta '() '() '())))
-      (if pn-found
-          (knot (changef (knot-knot-nodes aknot) 
-                         (lambda (kn) (equal? z (knot-node-z kn)))
-                         (knot-node z pn-found new-pn))
-                (cons new-pn (knot-path-nodes aknot)))
-          (knot (cons (knot-node z new-pn '()) (knot-knot-nodes aknot))
-                (cons new-pn (knot-path-nodes aknot))))))
-
-  (define (make-knot points thetas)
-    (if (null? points)
-        (knot '() '())
-        (cons-knot (car points) (car thetas) 
-                   (make-knot (cdr points) (cdr thetas)))))
-  
-  (define (knot-node-tweak-thetas kn)
-    (let* ((pn1 (knot-node-first-path-node kn))
-           (pn2 (knot-node-second-path-node kn))
-           (tweak (tweak-angles (path-node-angle pn1) (path-node-angle pn2)))
-           (z (knot-node-z kn)))
-      (knot-node z
-                 (path-node z (+ (path-node-theta pn1) tweak))
-                 (path-node z (- (path-node-theta pn2) tweak)))))
-  
-  (let* ((orig-k (make-knot zs thetas))
-        (k-nodes (map knot-node-tweak-thetas (knot-knot-nodes orig-k))))
-    (list orig-k k-nodes)))
-        
-       
-         
+(struct knot-node (z first-path-node second-path-node) #:mutable)
 
 (define (make-cycle . points)
   (define (aux points path knot-nodes)
@@ -344,6 +218,45 @@
 
 (map set-path-node-phi! cycle phis)
 
+(define (right-control-point index)
+  (let* ((theta (list-ref thetas index))
+         (phi (list-ref phis (next index)))
+         (rr (/ (velocity theta phi) 3))
+         (st (sin theta))
+         (sf (sin phi)))
+;    (when (or (and (>= sf 0)
+;                   (>= st 0))
+;              (and (<= st 0)
+;                   (<= sf 0)))
+;      (let ((sine (+ (* (abs st) (cos phi)) (* (abs sf) (cos theta)))))
+;        (when (and (> sine 0)
+;                   (< (abs sf) (* rr sine)))
+;          (set! rr (/ (abs sf) sine)))))
+    (+ (list-ref knots index)
+       (* (list-ref deltas index)
+          (make-polar 1 theta)
+          rr))))
+
+(define (left-control-point index)
+  (let* ((theta (list-ref thetas (prev index)))
+         (phi (list-ref phis index))
+         (ss (/ (velocity phi theta) 3))
+         (st (sin theta))
+         (sf (sin phi)))
+;    (when (or (and (>= sf 0)
+;                   (>= st 0))
+;              (and (<= st 0)
+;                   (<= sf 0)))
+;      (let ((sine (+ (* (abs st) (cos phi)) (* (abs sf) (cos theta)))))
+;        (when (and (> sine 0)
+;                   (< (abs st) (* ss sine)))
+;          (set! ss (/ (abs st) sine)))))
+    (- (list-ref knots index)
+       (* (list-ref deltas (prev index))
+          (make-polar 1 (- phi))
+          ss))))
+
+
 
 
 (define z-path%
@@ -365,36 +278,11 @@
     (super-new)))
 
 (define path (new z-path%))
-
 (send path z-move-to (car knots))
-
-
-;(define (right-control-point index)
-;  (let* ((theta (list-ref thetas index))
-;         (phi (list-ref phis (next index)))
-;         (rr (/ (velocity theta phi) 3))
-;         (st (sin theta))
-;         (sf (sin phi)))
-;    (+ (list-ref knots index)
-;       (* (list-ref deltas index)
-;          (make-polar 1 theta)
-;          rr))))
-;
-;(define (left-control-point index)
-;  (let* ((theta (list-ref thetas (prev index)))
-;         (phi (list-ref phis index))
-;         (ss (/ (velocity phi theta) 3))
-;         (st (sin theta))
-;         (sf (sin phi)))
-;    (- (list-ref knots index)
-;       (* (list-ref deltas (prev index))
-;          (make-polar 1 (- phi))
-;          ss))))
-
 (for ([i (range n)])
   (send path z-curve-to
-        (right-control-point (list-ref knots i) (list-ref deltas i) (list-ref thetas i) (list-ref phis (next i)))
-        (left-control-point (list-ref knots (next i)) (list-ref deltas i) (list-ref thetas i) (list-ref phis (next i)))
+        (right-control-point i)
+        (left-control-point (next i))
         (list-ref knots (next i))))
 
 (define frame (new frame%
@@ -408,10 +296,10 @@
           (send dc draw-path path))]))
 
 (define (get-path-node kn angle)
-  (let* ((pn1 (knot-node-first-path-node kn))
-	 (theta1 (path-node-theta pn1))
-	 (pn2 (knot-node-second-path-node kn))
-	 (theta2 (path-node-theta pn2)))
+  (let* ((pn1 (get-knot-node-first-path-node kn))
+	 (theta1 (get-path-node-theta pn1))
+	 (pn2 (get-knot-node-second-path-node kn))
+	 (theta2 (get-path-node-theta pn2)))
     (if (< (abs (cos (- angle theta1)))
 	   (abs (cos (- angle theta2))))
 	pn2
@@ -429,16 +317,12 @@
 	      (aux (cdr l) f valcar (car l))))))
   (aux l f +inf.0 '()))
 
-(define (get-nearest-node x y)
+(define get-nearest-node x y
   (minf knots 
 	(lambda (z) (magnitude (- z (make-rectangular x y))))))
-
 (define kg-canvas%
   (class canvas%
      (super-new)
-     (field [x 0]
-            [y 0]
-            [node '()])
      (define/override (on-event event)
        (let ((event-type (send event get-event-type)))
 	 (case event-type
@@ -456,4 +340,4 @@
 		    (get-path-node node 
 				   (angle (- mouse-z
 					     (make-rectangular x y))))))))))))
-
+))

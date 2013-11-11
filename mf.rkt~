@@ -159,7 +159,7 @@
           (knot (cons (knot-node z new-pn '()) (knot-knot-nodes aknot))
                 (cons new-pn (knot-path-nodes aknot))))))
 
-  (define (make-knot points chords thetas)
+  (define (make-knot points thetas)
     (if (null? points)
         (knot '() '())
         (cons-knot (car points) (car thetas) 
@@ -174,10 +174,9 @@
                  (path-node z (+ (path-node-theta pn1) tweak))
                  (path-node z (- (path-node-theta pn2) tweak)))))
   
-  (let ((orig-k (make-knot zs thetas)))
-    (knot-fill-chords orig-k)
-    (list orig-k  
-          (map knot-node-tweak-thetas (knot-knot-nodes orig-k)))))
+  (let* ((orig-k (make-knot zs thetas))
+        (k-nodes (map knot-node-tweak-thetas (knot-knot-nodes orig-k))))
+    (list orig-k k-nodes)))
         
        
          
@@ -227,10 +226,7 @@
     (map set-path-node-chord-right! cycle chords)
     (map set-path-node-chord-left! cycle (cycle-right-1 chords))))
 
-(define knot-fill-chords fill-up-chords)
-
 (fill-up-chords cycle)
-
 (map (lambda (pn)
        (set-path-node-psi! 
         pn

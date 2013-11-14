@@ -231,13 +231,14 @@
                    [label "Example"]
                    [width 500]
                    [height 500]))
-(define canvas
-  (new canvas% [parent frame]
-       [paint-callback
-        (lambda (canvas dc)
-          (send dc draw-path (knot-path 
+;(define canvas
+;  (new canvas% [parent frame]
+;       [paint-callback
+;        (lambda (canvas dc)
+;          (send dc draw-path (knot-path 
                               ;z1 z2 z3 z4 z2 z1 z4 z3)))]))
-                              z1 z2 z5 z7 z6 z4 z2 z1 z3 z6 z7 z5 z4 z3)))]))
+;                              z1 z2 z5 z7 z6 z4 z2 z1 z3 z6 z7 z5 z4 z3)))]))
+
 
 (define (get-path-node kn angle)
   (let* ((pn1 (knot-node-first-path-node kn))
@@ -267,16 +268,32 @@
 
 (define kg-canvas%
   (class canvas%
+    (init aknot)
+    (define mknot aknot)
+    (define mpath (apply knot-path (map path-node-z (knot-path-nodes mknot))))
     (super-new)
     (field [x 0]
            [y 0]
            [node '()])
+    (define/override (on-paint)
+      (let ((dc (send this get-dc)))
+        (send dc draw-path mpath)
+      (when (not (null? node))
+        (send dc set-brush "red" 'opaque)
+        (send dc draw-ellipse
+              (- (real-part node) 5)
+              (- (imag-part node) 5)
+              10
+              10))))
+
+              
     (define/override (on-event event)
       (let ((event-type (send event get-event-type)))
         (case event-type
           ('left-down (set! x (send event get-x))
                       (set! y (send event get-y))
-                      (set! node (get-nearest-node x y)))
+                      (set! node (get-nearest-node x y mknot))
+                      (send this flush))
           ('left-up
            (let ((mouse-z (make-rectangular
                            (send event get-x)
@@ -284,8 +301,14 @@
              (when (equal? node 
                            (get-nearest-node 
                             (send event get-x)
-                            (send event get-y)))
+                            (send event get-y)
+                            mknot))
                (get-path-node node 
                               (angle (- mouse-z
-                                        (make-rectangular x y))))))))))))
+                                        (make-rectangular x y))))))))))
+    ))
 
+(define canvas
+  (new kg-canvas%
+       [parent frame]
+       [aknot (make-knot z1 z2 z5 z7 z6 z4 z2 z1 z3 z6 z7 z5 z4 z3)]))

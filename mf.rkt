@@ -231,13 +231,6 @@
                    [label "Example"]
                    [width 500]
                    [height 500]))
-;(define canvas
-;  (new canvas% [parent frame]
-;       [paint-callback
-;        (lambda (canvas dc)
-;          (send dc draw-path (knot-path 
-                              ;z1 z2 z3 z4 z2 z1 z4 z3)))]))
-;                              z1 z2 z5 z7 z6 z4 z2 z1 z3 z6 z7 z5 z4 z3)))]))
 
 
 (define (get-path-node kn angle)
@@ -251,7 +244,6 @@
         pn1)))
 
 
-
 (define (minf l f)
   (define (aux l f val res)
     (if (null? l)
@@ -263,8 +255,8 @@
   (aux l f +inf.0 '()))
 
 (define (get-nearest-node x y aknot)
-  (minf (map knot-node-z (knot-knot-nodes aknot))
-        (lambda (z) (magnitude (- z (make-rectangular x y))))))
+  (minf (knot-knot-nodes aknot)
+        (lambda (k-node) (magnitude (- (knot-node-z k-node) (make-rectangular x y))))))
 
 (define kg-canvas%
   (class canvas%
@@ -274,17 +266,32 @@
     (super-new)
     (field [x 0]
            [y 0]
-           [node '()])
+           [z 0]
+           [node '()]
+           [pn '()])
     (define/override (on-paint)
       (let ((dc (send this get-dc)))
         (send dc draw-path mpath)
-      (when (not (null? node))
-        (send dc set-brush "red" 'opaque)
-        (send dc draw-ellipse
-              (- (real-part node) 5)
-              (- (imag-part node) 5)
-              10
-              10))))
+        (when (not (null? node))
+          (send dc set-brush "red" 'opaque)
+          (send dc draw-ellipse
+                (- (real-part z) 5)
+                (- (imag-part z) 5)
+                10
+                10)
+          (send dc set-brush "red" 'transparent))
+        (when (not (null? pn))
+          (let* ((z-delta (* 15 (make-polar 1 (path-node-angle pn))))
+                 (z-start (- z z-delta))
+                 (z-end   (+ z z-delta)))
+            (send dc set-pen "black" 5 'solid)
+            (send dc draw-line
+                  (real-part z-start)
+                  (imag-part z-start)
+                  (real-part z-end)
+                  (imag-part z-end))
+            (send dc set-pen "black" 1 'solid)))
+        ))
 
               
     (define/override (on-event event)
@@ -293,20 +300,21 @@
           ('left-down (set! x (send event get-x))
                       (set! y (send event get-y))
                       (set! node (get-nearest-node x y mknot))
-                      (send this flush))
+                      (set! z (knot-node-z node))
+                      (send this refresh))
           ('left-up
            (let ((mouse-z (make-rectangular
                            (send event get-x)
                            (send event get-y))))
-             (when (equal? node 
-                           (get-nearest-node 
-                            (send event get-x)
-                            (send event get-y)
-                            mknot))
-               (get-path-node node 
-                              (angle (- mouse-z
-                                        (make-rectangular x y))))))))))
-    ))
+             (when (and (equal? node 
+                                (get-nearest-node 
+                                 (send event get-x)
+                                 (send event get-y)
+                                 mknot))
+                        (not (equal? (- mouse-z z) 0)))
+               (set! pn (get-path-node node 
+                                       (angle (- mouse-z
+                                                 z))))))))))))
 
 (define canvas
   (new kg-canvas%

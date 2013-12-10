@@ -31,7 +31,7 @@
 
 (struct knot (knot-nodes path-nodes) #:transparent)
 
-(define (make-knot . points)
+(define (make-naked-knot . points)
   (define (aux points path knot-nodes)
     (if (null? points)
         (knot knot-nodes (reverse path))
@@ -44,6 +44,25 @@
                    (cons (knot-node z pn-found new-pn) knot-nodes)
                    knot-nodes)))))
   (aux points '() '()))
+
+; many things borrowed from
+; http://hackage.haskell.org/package/cubicbezier-0.2.0/docs/Geom2D-CubicBezier-MetaPath.html
+(define (make-knot . points)
+  (let* ((k (apply make-naked-knot points))
+         (chords (cycle-map-minus points))
+         (turnAngles (map turnAngle (cycle-right-1 chords) chords))
+         (orig-thetas (matrix->list 
+                       (matrix-solve 
+                        (knot-matrix chords)
+                        (knot-right-vector chords turnAngles))))
+         (pnodes (knot-path-nodes k)))
+    (map set-path-node-chord-right! pnodes chords)
+    (map set-path-node-chord-left! pnodes (cycle-right-1 chords))
+    (map set-path-node-theta! pnodes orig-thetas)
+    (map knot-node-tweak-thetas! (knot-knot-nodes k))
+    (knot-fill-phis! k turnAngles)
+    k))
+         
 
 (define (turnAngle chord1 chord2)
   (angle (/ chord2 chord1)))
@@ -109,7 +128,7 @@
                         (knot-matrix chords)
                         (knot-right-vector chords turnAngles))))
          (thetas (knot-tweak-thetas points orig-thetas))
-         (phis (map (lambda (theta psi) (- 0 theta psi))
+         (phis (map (lambda (theta turnAngle) (- 0 theta turnAngle))
                     thetas
                     turnAngles))
          (z-path (new z-path%)))
@@ -121,12 +140,17 @@
          (left-cycle-1 points))
     z-path))
 
-
+(define (knot-fill-phis! k turnAngles)
+  (map 
+   (lambda (pnode turnAngle)
+     (set-path-node-phi! pnode (- 0 (path-node-theta pnode) turnAngle)))
+   (knot-path-nodes k)
+   turnAngles))
 
 (define (knot-tweak-thetas zs thetas)
   (let ((orig-k (apply make-knot zs)))
     (map set-path-node-theta! (knot-path-nodes orig-k) thetas)
-    (knot-fill-chords orig-k)
+    (knot-fill-chords! orig-k)
     (map knot-node-tweak-thetas! (knot-knot-nodes orig-k))
     (map path-node-theta (knot-path-nodes orig-k))))
 
@@ -137,22 +161,28 @@
 (define z5 400+100i)
 (define z6 400+300i)
 (define z7 500+200i)
-;
-;z1 z2 z5 z7 z6 z4 z2 z1 z3 z6 z7 z5 z4 z3
+
 
 ;(define z1 100+200i )
 ;(define z2 300+200i )
 ;(define z3 200+258i)
 ;(define z4 200+373i )
 
-(define (fill-up-chords cycle)
-  (let ((chords (map (lambda (pn1 pn2) (- (path-node-z pn2) (path-node-z pn1)))
-                     cycle
-                     (cycle-left-1 cycle))))
-    (map set-path-node-chord-right! cycle chords)
-    (map set-path-node-chord-left! cycle (cycle-right-1 chords))))
+;(define (fill-up-chords! pnodes)
+;  (let ((chords (map (lambda (pn1 pn2) (- (path-node-z pn2) (path-node-z pn1)))
+;                     pnodes
+;                     (cycle-left-1 pnodes))))
+;    (map set-path-node-chord-right! pnodes chords)
+;    (map set-path-node-chord-left! pnodes (cycle-right-1 chords))))
 
-(define (knot-fill-chords k) (fill-up-chords (knot-path-nodes k)))
+(define (knot-fill-chords! k) 
+  (let* ((pnodes (knot-path-nodes k))
+         (zs (map path-node-z pnodes))
+         (chords (cycle-map-minus zs)))
+    (map set-path-node-chord-right! pnodes chords)
+    (map set-path-node-chord-left! pnodes (cycle-right-1 chords))))
+  
+;  (fill-up-chords! (knot-path-nodes k)))
 
 
 ;mf116

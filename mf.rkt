@@ -168,12 +168,6 @@
 ;(define z3 200+258i)
 ;(define z4 200+373i )
 
-;(define (fill-up-chords! pnodes)
-;  (let ((chords (map (lambda (pn1 pn2) (- (path-node-z pn2) (path-node-z pn1)))
-;                     pnodes
-;                     (cycle-left-1 pnodes))))
-;    (map set-path-node-chord-right! pnodes chords)
-;    (map set-path-node-chord-left! pnodes (cycle-right-1 chords))))
 
 (define (knot-fill-chords! k) 
   (let* ((pnodes (knot-path-nodes k))
@@ -182,7 +176,6 @@
     (map set-path-node-chord-right! pnodes chords)
     (map set-path-node-chord-left! pnodes (cycle-right-1 chords))))
   
-;  (fill-up-chords! (knot-path-nodes k)))
 
 
 ;mf116
@@ -265,11 +258,11 @@
 
 (define (get-path-node kn angle)
   (let* ((pn1 (knot-node-first-path-node kn))
-         (theta1 (path-node-theta pn1))
+         (angle1 (path-node-angle pn1))
          (pn2 (knot-node-second-path-node kn))
-         (theta2 (path-node-theta pn2)))
-    (if (< (abs (cos (- angle theta1)))
-           (abs (cos (- angle theta2))))
+         (angle2 (path-node-angle pn2)))
+    (if (< (abs (cos (- angle angle1)))
+           (abs (cos (- angle angle2))))
         pn2
         pn1)))
 
@@ -331,6 +324,7 @@
                       (set! y (send event get-y))
                       (set! node (get-nearest-node x y mknot))
                       (set! z (knot-node-z node))
+                      (set! pn '())
                       (send this refresh))
           ('left-up
            (let ((mouse-z (make-rectangular
@@ -344,7 +338,9 @@
                         (not (equal? (- mouse-z z) 0)))
                (set! pn (get-path-node node 
                                        (angle (- mouse-z
-                                                 z))))))))))))
+                                                 z))))
+               (send this refresh)
+               ))))))))
 
 (define canvas
   (new kg-canvas%

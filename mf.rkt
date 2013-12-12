@@ -17,7 +17,7 @@
   (cycle-map - l))
 
 (struct path-node 
-  (z chord-left chord-right psi theta phi control-left control-right )
+  (z chord-left chord-right psi theta phi control-left control-right)
   #:mutable #:transparent)
 
 (define (path-node-angle pn)
@@ -27,21 +27,21 @@
 (define (add-path-node-theta! pn d-theta)
   (set-path-node-theta! pn (+ (path-node-theta pn) d-theta)))
 
-(struct knot-node (z first-path-node second-path-node) #:mutable #:transparent)
+(struct knot-node (z first-path-node second-path-node over) #:mutable #:transparent)
 
-(struct knot (knot-nodes path-nodes) #:transparent)
+(struct knot (knot-nodes path-nodes path)  #:mutable #:transparent)
 
 (define (make-naked-knot . points)
   (define (aux points path knot-nodes)
     (if (null? points)
-        (knot knot-nodes (reverse path))
+        (knot knot-nodes (reverse path) '())
         (let* ((z (car points))
                (pn-found (findf (lambda (pn) (equal? z (path-node-z pn))) path))
                (new-pn  (path-node z '() '() '() '() '() '() '())))
           (aux (cdr points)
                (cons new-pn path)
                (if pn-found 
-                   (cons (knot-node z pn-found new-pn) knot-nodes)
+                   (cons (knot-node z pn-found new-pn 'none) knot-nodes)
                    knot-nodes)))))
   (aux points '() '()))
 
@@ -61,8 +61,47 @@
     (map set-path-node-theta! pnodes orig-thetas)
     (map knot-node-tweak-thetas! (knot-knot-nodes k))
     (knot-fill-phis! k turnAngles)
+    (map fill-path-node-control-points! pnodes (cycle-left-1 pnodes))
+    (knot-fill-path! k)
     k))
-         
+
+(define (knot-fill-path! k)
+  (let ((z-path (new z-path%))
+        (pnodes (knot-path-nodes k)))
+    (send z-path z-move-to (path-node-z (car (knot-path-nodes k))))
+    (for ([pnode-k pnodes]
+          [pnode-k+1 (left-cycle-1 pnodes)])
+      (send z-path z-curve-to (path-node-control-right pnode-k)
+                              (path-node-control-left pnode-k+1)
+                              (path-node-z pnode-k+1)))
+    (set-knot-path! k z-path)))
+
+(define (fill-path-node-control-points! pnode-k pnode-k+1)
+  (set-path-node-control-right! 
+   pnode-k
+   (right-control-point (path-node-z pnode-k)
+                        (path-node-chord-right pnode-k)
+                        (path-node-theta pnode-k)
+                        (path-node-phi pnode-k+1)))
+  (set-path-node-control-left! 
+   pnode-k+1
+   (left-control-point (path-node-z pnode-k+1)
+                        (path-node-chord-left pnode-k+1)
+                        (path-node-theta pnode-k)
+                        (path-node-phi pnode-k+1))))
+
+(define (draw-knot k dc)
+  (send dc draw-path (knot-path k))
+  (for ([pnode (knot-path-nodes k)])
+    (let* ((pen (send dc get-pen))
+           (z (path-node-z pnode))
+           (z-angle (* 15 (make-polar 1 (path-node-angle pnode)))))
+      (send dc set-pen "white" 20 'solid)
+      (draw-z-line dc z z-angle)
+      (send dc set-pen "black" 7 'solid)
+      (draw-z-line dc z (* 15 z-angle))
+      (send dc set-pen pen))))
+
 
 (define (turnAngle chord1 chord2)
   (angle (/ chord2 chord1)))
@@ -120,25 +159,25 @@
         (/ (velocity phi theta) 3))))
 
 
-(define (knot-path . points)
-  (let* ((chords (cycle-map-minus points))
-         (turnAngles (map turnAngle (cycle-right-1 chords) chords))
-         (orig-thetas (matrix->list 
-                       (matrix-solve 
-                        (knot-matrix chords)
-                        (knot-right-vector chords turnAngles))))
-         (thetas (knot-tweak-thetas points orig-thetas))
-         (phis (map (lambda (theta turnAngle) (- 0 theta turnAngle))
-                    thetas
-                    turnAngles))
-         (z-path (new z-path%)))
-    (send z-path z-move-to (car points))
-    (map (lambda (zk+ zk+1- zk+1)
-           (send z-path z-curve-to zk+ zk+1- zk+1))
-         (map right-control-point points chords thetas (left-cycle-1 phis))
-         (map left-control-point (left-cycle-1 points) chords thetas (left-cycle-1 phis))
-         (left-cycle-1 points))
-    z-path))
+;(define (knot-path . points)
+;  (let* ((chords (cycle-map-minus points))
+;         (turnAngles (map turnAngle (cycle-right-1 chords) chords))
+;         (orig-thetas (matrix->list 
+;                       (matrix-solve 
+;                        (knot-matrix chords)
+;                        (knot-right-vector chords turnAngles))))
+;         (thetas (knot-tweak-thetas points orig-thetas))
+;         (phis (map (lambda (theta turnAngle) (- 0 theta turnAngle))
+;                    thetas
+;                    turnAngles))
+;         (z-path (new z-path%)))
+;    (send z-path z-move-to (car points))
+;    (map (lambda (zk+ zk+1- zk+1)
+;           (send z-path z-curve-to zk+ zk+1- zk+1))
+;         (map right-control-point points chords thetas (left-cycle-1 phis))
+;         (map left-control-point (left-cycle-1 points) chords thetas (left-cycle-1 phis))
+;         (left-cycle-1 points))
+;    z-path))
 
 (define (knot-fill-phis! k turnAngles)
   (map 
@@ -281,66 +320,78 @@
   (minf (knot-knot-nodes aknot)
         (lambda (k-node) (magnitude (- (knot-node-z k-node) (make-rectangular x y))))))
 
+(define (draw-z-line dc z z-delta)
+  (let ((z-start (- z z-delta))
+        (z-end   (+ z z-delta)))
+    (send dc draw-line
+          (real-part z-start)
+          (imag-part z-start)
+          (real-part z-end)
+          (imag-part z-end))))
+
 (define kg-canvas%
   (class canvas%
     (init aknot)
     (define mknot aknot)
-    (define mpath (apply knot-path (map path-node-z (knot-path-nodes mknot))))
+;    (define mpath (apply knot-path (map path-node-z (knot-path-nodes mknot))))
+    (define mpath (knot-path mknot))
     (super-new)
     (field [x 0]
            [y 0]
            [z 0]
-           [node '()]
-           [pn '()])
+           [knode '()]
+           [pnode '()])
+
+    
     (define/override (on-paint)
       (let ((dc (send this get-dc)))
+        (send dc set-pen "black" 5 'solid)
         (send dc draw-path mpath)
-        (when (not (null? node))
-          (send dc set-brush "red" 'opaque)
-          (send dc draw-ellipse
-                (- (real-part z) 5)
-                (- (imag-part z) 5)
-                10
-                10)
-          (send dc set-brush "red" 'transparent))
-        (when (not (null? pn))
-          (let* ((z-delta (* 15 (make-polar 1 (path-node-angle pn))))
+        (if (not (null? pnode))
+          (let* ((z-delta (* 15 (make-polar 1 (path-node-angle pnode))))
                  (z-start (- z z-delta))
                  (z-end   (+ z z-delta)))
-            (send dc set-pen "black" 5 'solid)
-            (send dc draw-line
-                  (real-part z-start)
-                  (imag-part z-start)
-                  (real-part z-end)
-                  (imag-part z-end))
-            (send dc set-pen "black" 1 'solid)))
+            (send dc set-pen "white" 20 'solid)
+            (draw-z-line dc z (/ z-delta 15))
+            (send dc set-pen "black" 7 'solid)
+            (draw-z-line dc z z-delta)
+            (send dc set-pen "black" 1 'solid))
+          (when (not (null? knode))
+            (send dc set-brush "black" 'opaque)
+            (send dc draw-ellipse
+                  (- (real-part z) 5)
+                  (- (imag-part z) 5)
+                  10
+                  10)
+            (send dc set-brush "black" 'transparent)))
         ))
 
               
     (define/override (on-event event)
       (let ((event-type (send event get-event-type)))
         (case event-type
-          ('left-down (set! x (send event get-x))
+          ['left-down (set! x (send event get-x))
                       (set! y (send event get-y))
-                      (set! node (get-nearest-node x y mknot))
-                      (set! z (knot-node-z node))
-                      (set! pn '())
-                      (send this refresh))
-          ('left-up
+                      (set! knode (get-nearest-node x y mknot))
+                      (set! z (knot-node-z knode))
+                      (set! pnode '())
+                      (send this refresh)]
+          [(left-up)
            (let ((mouse-z (make-rectangular
                            (send event get-x)
                            (send event get-y))))
-             (when (and (equal? node 
+             (when (and (equal? knode 
                                 (get-nearest-node 
                                  (send event get-x)
                                  (send event get-y)
                                  mknot))
                         (not (equal? (- mouse-z z) 0)))
-               (set! pn (get-path-node node 
+               (set! pnode (get-path-node knode 
                                        (angle (- mouse-z
                                                  z))))
                (send this refresh)
-               ))))))))
+               ))]
+          )))))
 
 (define canvas
   (new kg-canvas%

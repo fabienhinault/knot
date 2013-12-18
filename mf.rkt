@@ -74,10 +74,32 @@
     (for ([pn1 pnodes]
           [pn2 (cycle-left-1 pnodes)])
       (if (equal? (path-node-parent pn1) (path-node-parent pn2))
-          '()
-          '()))))
+          (let ((knode (path-node-parent pn1)))
+            (set-path-node-parent pn1 '())
+            (set-path-node-parent pn2 '())
+            (knot (filter (lambda (kn) (not (equal? kn knode)))
+                          (knot-knote-nodes k))
+                  (filter (lambda (pn) (not (or (equal? pn pn1)(equal? pn pn2))))
+                          (knot-path-nodes k))
+                  (knot-path k))
+                   '()))))
           
-      
+(define (knot-detect-loop k)
+  (let ((pnodes (knot-path-nodes k)))
+    (findf (lambda (pns) (equal? (path-node-parent (car pns)) (path-node-parent (cadr pns))))
+           (map list pnodes (cycle-left-1 pnodes)))))
+        
+(define (knot-remove-loop k knot-loop)
+  (let* ((pnodes (filter (lambda (pn) (not (member loop)))
+                         (knot-path-nodes k)))
+         (apply make-knot (map path-node-z pnodes)))))
+  
+; (define (knot-detect-pattern-2 k)
+;   (let ((knodes (knot-knot-nodes k)))
+;     (for ([kn knodes])
+;       (let (next1 (path-node-parent (
+;  TODO change first-node and second-node to point to lists in order to access neighbours.
+  
 
 (define (knot-fill-path! k)
   (let ((z-path (new z-path%))

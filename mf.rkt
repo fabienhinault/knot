@@ -99,12 +99,13 @@
 (define (knot-remove-loop k knot-loop)
   (let* ((pnodes (filter (lambda (pn) (not (member knot-loop)))
                          (knot-path-nodes k))))
-         (apply make-knot (map path-node-z pnodes))))
+         (apply make-knot (map path-node-z (map car pnodes)))))
   
 (define (knot-detect-pattern-2 k)
-  (findf knot-node-is-pattern-2 (knot-knot-nodes k)))
+  (let ((kn (findf knot-node-is-pattern-2 (knot-knot-nodes k))))
+    (knot-node-is-pattern-2 kn)))
                 
-(define (knot-node-is-pattern-2 knode)
+(define (knot-node-is-pattern-2 kn)
   (if (not (null? (cdr (knot-node-first-path-node kn))))
       (let* ((next-pn (cadr (knot-node-first-path-node kn)))
              (next-kn (path-node-parent next-pn))
@@ -116,11 +117,12 @@
                 (and (equal? (cdr pn1) pn3) (equal? (cdr pn4) pn2))
                 (and (equal? (cdr pn3) pn1) (equal? (cdr pn2) pn4))
                 (and (equal? (cdr pn3) pn1) (equal? (cdr pn4) pn2)))
-            (list pn1 pn3 pn2 pn4)
-            #f))))
+            (list (car pn1) (car pn3) (car pn2) (car pn4))
+            #f))
+      #f))
 
-(define (knot-remove-pattern-2 knode pattern)
-   (let* ((pnodes (filter (lambda (pn) (not (member pattern)))
+(define (knot-remove-pattern-2 k pattern)
+   (let* ((pnodes (filter (lambda (pn) (not (member pn pattern)))
                           (knot-path-nodes k))))
      (apply make-knot (map path-node-z pnodes))))
 
@@ -329,6 +331,8 @@
     (public z-move-to)
     (super-new)))
 
+(define *knot* (make-knot z1 z2 z5 z7 z6 z4 z2 z1 z3 z6 z7 z5 z4 z3))
+
 (define (start)
   (let* ((frame (new frame%
                    [label "Example"]
@@ -337,7 +341,7 @@
          (canvas
           (new kg-canvas%
                [parent frame]
-               [aknot (make-knot z1 z2 z5 z7 z6 z4 z2 z1 z3 z6 z7 z5 z4 z3)])))
+               [aknot *knot*])))
     (send frame show #t)))
     
 
@@ -374,6 +378,10 @@
           (imag-part z-start)
           (real-part z-end)
           (imag-part z-end))))
+
+(define (knot-finished? k)
+  (andmap (lambda (kn) (not (equal? 'none (knot-node-over kn))))
+          (knot-knot-nodes k)))
 
 (define (computer-play k)
   (let ((knode (findf (lambda (kn) (equal? (knot-node-over kn) 'none))

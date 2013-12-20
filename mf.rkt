@@ -32,22 +32,46 @@
 
 (struct knot (knot-nodes path-nodes path)  #:mutable #:transparent)
 
+;(define (make-naked-knot . points)
+;  (define (aux points path knot-nodes)
+;    (if (null? points)
+;        (knot knot-nodes (reverse path) '())
+;        (let* ((z (car points))
+;               (pn-found (findf (lambda (pn) (equal? z (path-node-z pn))) path))
+;               (new-pn  (path-node z '() '() '() '() '() '() '() '())))
+;          (aux (cdr points)
+;               (cons new-pn path)
+;               (if pn-found
+;                   (let ((new-kn (knot-node z pn-found new-pn 'none)))
+;                     (set-path-node-parent! pn-found new-kn)
+;                     (set-path-node-parent! new-pn new-kn)
+;                     (cons new-kn knot-nodes))
+;                   knot-nodes)))))
+;  (aux points '() '()))
+
 (define (make-naked-knot . points)
-  (define (aux points path knot-nodes)
-    (if (null? points)
-        (knot knot-nodes (reverse path) '())
-        (let* ((z (car points))
-               (pn-found (findf (lambda (pn) (equal? z (path-node-z pn))) path))
-               (new-pn  (path-node z '() '() '() '() '() '() '() '())))
-          (aux (cdr points)
-               (cons new-pn path)
-               (if pn-found
-                   (let ((new-kn (knot-node z pn-found new-pn 'none)))
-                     (set-path-node-parent! pn-found new-kn)
-                     (set-path-node-parent! new-pn new-kn)
-                     (cons new-kn knot-nodes))
-                   knot-nodes)))))
-  (aux points '() '()))
+  (define (make-knot-node pnodes)
+    (cond ((null? pnodes) '())
+          (else
+           (let* ((z (path-node-z (car pnodes)))
+                  (pnodes2 (memf (lambda (pn) (equal? z (path-node-z pn))) (cdr pnodes)))
+                  (knode (knot-node z pnodes pnodes2 'none)))
+             (set-path-node-parent! (car pnodes) knode)
+             (set-path-node-parent! (car pnodes2) knode)
+             knode))))
+  
+  (define (make-knot-nodes pnodes)
+    (cond ((null? pnodes) '())
+          ((not (null? (path-node-parent (car pnodes))))
+           (make-knot-nodes (cdr pnodes)))
+          (else        
+           (cons (make-knot-node pnodes) (make-knot-nodes (cdr pnodes))))))
+                  
+  (let ((path-nodes (map 
+                     (lambda (z) (path-node z '() '() '() '() '() '() '() '()))
+                     points)))
+    (knot (make-knot-nodes path-nodes) path-nodes '())))
+        
 
 ; many things borrowed from
 ; http://hackage.haskell.org/package/cubicbezier-0.2.0/docs/Geom2D-CubicBezier-MetaPath.html
@@ -69,20 +93,20 @@
     (knot-fill-path! k)
     k))
 
-(define (knot-solve k)
-  (let ((pnodes (knot-path-nodes k)))
-    (for ([pn1 pnodes]
-          [pn2 (cycle-left-1 pnodes)])
-      (if (equal? (path-node-parent pn1) (path-node-parent pn2))
-          (let ((knode (path-node-parent pn1)))
-            (set-path-node-parent pn1 '())
-            (set-path-node-parent pn2 '())
-            (knot (filter (lambda (kn) (not (equal? kn knode)))
-                          (knot-knote-nodes k))
-                  (filter (lambda (pn) (not (or (equal? pn pn1)(equal? pn pn2))))
-                          (knot-path-nodes k))
-                  (knot-path k))
-                   '()))))
+;(define (knot-solve k)
+;  (let ((pnodes (knot-path-nodes k)))
+;    (for ([pn1 pnodes]
+;          [pn2 (cycle-left-1 pnodes)])
+;      (if (equal? (path-node-parent pn1) (path-node-parent pn2))
+;          (let ((knode (path-node-parent pn1)))
+;            (set-path-node-parent pn1 '())
+;            (set-path-node-parent pn2 '())
+;            (knot (filter (lambda (kn) (not (equal? kn knode)))
+;                          (knot-knote-nodes k))
+;                  (filter (lambda (pn) (not (or (equal? pn pn1)(equal? pn pn2))))
+;                          (knot-path-nodes k))
+;                  (knot-path k))
+;                   '())))))
           
 (define (knot-detect-loop k)
   (let ((pnodes (knot-path-nodes k)))
@@ -90,9 +114,9 @@
            (map list pnodes (cycle-left-1 pnodes)))))
         
 (define (knot-remove-loop k knot-loop)
-  (let* ((pnodes (filter (lambda (pn) (not (member loop)))
-                         (knot-path-nodes k)))
-         (apply make-knot (map path-node-z pnodes)))))
+  (let* ((pnodes (filter (lambda (pn) (not (member knot-loop)))
+                         (knot-path-nodes k))))
+         (apply make-knot (map path-node-z pnodes))))
   
 ; (define (knot-detect-pattern-2 k)
 ;   (let ((knodes (knot-knot-nodes k)))
@@ -280,8 +304,8 @@
  #true)
 
 (define (knot-node-tweak-thetas! kn)
-  (let* ((pn1 (knot-node-first-path-node kn))
-         (pn2 (knot-node-second-path-node kn))
+  (let* ((pn1 (car (knot-node-first-path-node kn)))
+         (pn2 (car (knot-node-second-path-node kn)))
          (tweak (tweak-angles  (path-node-angle pn1) (path-node-angle pn2))))
     (add-path-node-theta! pn1 (+ tweak))
     (add-path-node-theta! pn2 (- tweak))))
@@ -319,9 +343,9 @@
     
 
 (define (get-path-node kn angle)
-  (let* ((pn1 (knot-node-first-path-node kn))
+  (let* ((pn1 (car (knot-node-first-path-node kn)))
          (angle1 (path-node-angle pn1))
-         (pn2 (knot-node-second-path-node kn))
+         (pn2 (car (knot-node-second-path-node kn)))
          (angle2 (path-node-angle pn2)))
     (if (< (abs (cos (- angle angle1)))
            (abs (cos (- angle angle2))))
@@ -356,7 +380,7 @@
   (let ((knode (findf (lambda (kn) (equal? (knot-node-over kn) 'none))
                       (knot-knot-nodes k))))
     (when knode
-      (set-knot-node-over! knode (knot-node-first-path-node knode)))))
+      (set-knot-node-over! knode (car (knot-node-first-path-node knode))))))
 
 (define kg-canvas%
   (class canvas%

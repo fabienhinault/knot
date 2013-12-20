@@ -32,23 +32,6 @@
 
 (struct knot (knot-nodes path-nodes path)  #:mutable #:transparent)
 
-;(define (make-naked-knot . points)
-;  (define (aux points path knot-nodes)
-;    (if (null? points)
-;        (knot knot-nodes (reverse path) '())
-;        (let* ((z (car points))
-;               (pn-found (findf (lambda (pn) (equal? z (path-node-z pn))) path))
-;               (new-pn  (path-node z '() '() '() '() '() '() '() '())))
-;          (aux (cdr points)
-;               (cons new-pn path)
-;               (if pn-found
-;                   (let ((new-kn (knot-node z pn-found new-pn 'none)))
-;                     (set-path-node-parent! pn-found new-kn)
-;                     (set-path-node-parent! new-pn new-kn)
-;                     (cons new-kn knot-nodes))
-;                   knot-nodes)))))
-;  (aux points '() '()))
-
 (define (make-naked-knot . points)
   (define (make-knot-node pnodes)
     (cond ((null? pnodes) '())
@@ -118,12 +101,28 @@
                          (knot-path-nodes k))))
          (apply make-knot (map path-node-z pnodes))))
   
-; (define (knot-detect-pattern-2 k)
-;   (let ((knodes (knot-knot-nodes k)))
-;     (for ([kn knodes])
-;       (let (next1 (path-node-parent (
-;  TODO change first-node and second-node to point to lists in order to access neighbours.
-  
+(define (knot-detect-pattern-2 k)
+  (findf knot-node-is-pattern-2 (knot-knot-nodes k)))
+                
+(define (knot-node-is-pattern-2 knode)
+  (if (not (null? (cdr (knot-node-first-path-node kn))))
+      (let* ((next-pn (cadr (knot-node-first-path-node kn)))
+             (next-kn (path-node-parent next-pn))
+             (pn1 (knot-node-first-path-node kn))
+             (pn2 (knot-node-second-path-node kn))
+             (pn3 (knot-node-first-path-node next-kn))
+             (pn4 (knot-node-second-path-node next-kn)))
+        (if (or (and (equal? (cdr pn1) pn3) (equal? (cdr pn2) pn4))
+                (and (equal? (cdr pn1) pn3) (equal? (cdr pn4) pn2))
+                (and (equal? (cdr pn3) pn1) (equal? (cdr pn2) pn4))
+                (and (equal? (cdr pn3) pn1) (equal? (cdr pn4) pn2)))
+            (list pn1 pn3 pn2 pn4)
+            #f))))
+
+(define (knot-remove-pattern-2 knode pattern)
+   (let* ((pnodes (filter (lambda (pn) (not (member pattern)))
+                          (knot-path-nodes k))))
+     (apply make-knot (map path-node-z pnodes))))
 
 (define (knot-fill-path! k)
   (let ((z-path (new z-path%))

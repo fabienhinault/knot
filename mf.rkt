@@ -49,12 +49,12 @@
            (make-knot-nodes (cdr pnodes)))
           (else        
            (cons (make-knot-node pnodes) (make-knot-nodes (cdr pnodes))))))
-                  
+  
   (let ((path-nodes (map 
                      (lambda (z) (path-node z '() '() '() '() '() '() '() '()))
                      points)))
     (knot (make-knot-nodes path-nodes) path-nodes '())))
-        
+
 
 ; many things borrowed from
 ; http://hackage.haskell.org/package/cubicbezier-0.2.0/docs/Geom2D-CubicBezier-MetaPath.html
@@ -76,35 +76,21 @@
     (knot-fill-path! k)
     k))
 
-;(define (knot-solve k)
-;  (let ((pnodes (knot-path-nodes k)))
-;    (for ([pn1 pnodes]
-;          [pn2 (cycle-left-1 pnodes)])
-;      (if (equal? (path-node-parent pn1) (path-node-parent pn2))
-;          (let ((knode (path-node-parent pn1)))
-;            (set-path-node-parent pn1 '())
-;            (set-path-node-parent pn2 '())
-;            (knot (filter (lambda (kn) (not (equal? kn knode)))
-;                          (knot-knote-nodes k))
-;                  (filter (lambda (pn) (not (or (equal? pn pn1)(equal? pn pn2))))
-;                          (knot-path-nodes k))
-;                  (knot-path k))
-;                   '())))))
-          
+
 (define (knot-detect-loop k)
   (let ((pnodes (knot-path-nodes k)))
     (findf (lambda (pns) (equal? (path-node-parent (car pns)) (path-node-parent (cadr pns))))
            (map list pnodes (cycle-left-1 pnodes)))))
-        
+
 (define (knot-remove-loop k knot-loop)
   (let* ((pnodes (filter (lambda (pn) (not (member knot-loop)))
                          (knot-path-nodes k))))
-         (apply make-knot (map path-node-z (map car pnodes)))))
-  
+    (apply make-knot (map path-node-z (map car pnodes)))))
+
 (define (knot-detect-pattern-2 k)
   (let ((kn (findf knot-node-is-pattern-2 (knot-knot-nodes k))))
     (knot-node-is-pattern-2 kn)))
-                
+
 (define (knot-node-is-pattern-2 kn)
   (if (not (null? (cdr (knot-node-first-path-node kn))))
       (let* ((next-pn (cadr (knot-node-first-path-node kn)))
@@ -122,9 +108,9 @@
       #f))
 
 (define (knot-remove-pattern-2 k pattern)
-   (let* ((pnodes (filter (lambda (pn) (not (member pn pattern)))
-                          (knot-path-nodes k))))
-     (apply make-knot (map path-node-z pnodes))))
+  (let* ((pnodes (filter (lambda (pn) (not (member pn pattern)))
+                         (knot-path-nodes k))))
+    (apply make-knot (map path-node-z pnodes))))
 
 (define (knot-fill-path! k)
   (let ((z-path (new z-path%))
@@ -335,15 +321,15 @@
 
 (define (start)
   (let* ((frame (new frame%
-                   [label "Example"]
-                   [width 600]
-                   [height 450]))
+                     [label "Example"]
+                     [width 600]
+                     [height 450]))
          (canvas
           (new kg-canvas%
                [parent frame]
                [aknot *knot*])))
     (send frame show #t)))
-    
+
 
 (define (get-path-node kn angle)
   (let* ((pn1 (car (knot-node-first-path-node kn)))
@@ -367,7 +353,8 @@
   (aux l f +inf.0 '()))
 
 (define (get-nearest-node x y aknot)
-  (minf (knot-knot-nodes aknot)
+  (minf (filter (lambda (knode) (equal? 'none (knot-node-over knode)))
+                (knot-knot-nodes aknot))
         (lambda (k-node) (magnitude (- (knot-node-z k-node) (make-rectangular x y))))))
 
 (define (draw-z-line dc z z-delta)
@@ -402,24 +389,34 @@
            [knode '()]
            [pnode '()])
     
-    
     (define/override (on-paint)
       (let ((dc (send this get-dc)))
         (knot-draw mknot dc)
-        (when (not (null? knode))
-          (send dc set-brush "black" 'opaque)
-          (send dc draw-ellipse
-                   (- (real-part z) 5)
-                   (- (imag-part z) 5)
-                   10
-                   10)
-          (send dc set-brush "black" 'transparent)))
-      )
+        (when (not (null? pnode))
+          (let* ((brush (send dc get-brush))
+                 (pen (send dc get-pen))
+                 (z (path-node-z pnode))
+                 (z-angle (make-polar 1 (path-node-angle pnode))))
+            (send dc set-pen "yellow" 10 'solid)
+            (draw-z-line dc z (* 10 z-angle))
+            (send dc set-pen "black" 5 'solid)
+            (draw-z-line dc z (* 10 z-angle))
+            (send dc set-brush brush)
+            (send dc set-pen pen)))))
     
     
     (define/override (on-event event)
       (let ((event-type (send event get-event-type)))
         (case event-type
+          ['motion      
+           (let* ((x (send event get-x))
+                  (y (send event get-y))
+                  (z (make-rectangular x y))
+                  (knode (get-nearest-node x y mknot))
+                  (knode-z (knot-node-z knode)))
+             (when (not (equal? (- knode-z z) 0))
+               (set! pnode (get-path-node knode (angle (- z knode-z))))
+               (send this refresh)))]
           ['left-down (set! x (send event get-x))
                       (set! y (send event get-y))
                       (set! knode (get-nearest-node x y mknot))

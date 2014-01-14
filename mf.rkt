@@ -76,6 +76,24 @@
     (knot-fill-path! k)
     k))
 
+(define (make-knot2 zs order)
+  (let* ((points (map (lambda (i) (list-ref zs i)) order))
+         (k (apply make-naked-knot points))
+         (chords (cycle-map-minus points))
+         (turnAngles (map turnAngle (cycle-right-1 chords) chords))
+         (orig-thetas (matrix->list 
+                       (matrix-solve 
+                        (knot-matrix chords)
+                        (knot-right-vector chords turnAngles))))
+         (pnodes (knot-path-nodes k)))
+    (map set-path-node-chord-right! pnodes chords)
+    (map set-path-node-chord-left! pnodes (cycle-right-1 chords))
+    (map set-path-node-theta! pnodes orig-thetas)
+    (map knot-node-tweak-thetas! (knot-knot-nodes k))
+    (knot-fill-phis! k turnAngles)
+    (map fill-path-node-control-points! pnodes (cycle-left-1 pnodes))
+    (knot-fill-path! k)
+    k))
 
 (define (knot-detect-loop k)
   (let ((pnodes (knot-path-nodes k)))
@@ -84,12 +102,26 @@
 
 (define (knot-remove-loop k knot-loop)
   (let* ((pnodes (filter (lambda (pn) (not (member knot-loop)))
-                         (knot-path-nodes k))))
-    (apply make-knot (map path-node-z (map car pnodes)))))
+                         (knot-path-nodes k)))
+         (points (map path-node-z pnodes))
+         (chords (cycle-map-minus points))
+         (turnAngles (map turnAngle (cycle-right-1 chords) chords))
+         (res (apply make-naked-knot points))
+         (res-pnodes (knot-path-nodes res)))
+    (map set-path-node-chord-right! res-pnodes chords)
+    (map set-path-node-chord-left! res-pnodes (cycle-right-1 chords))
+    (map set-path-node-theta! res-pnodes (map path-node-theta pnodes))
+    
+    (knot-fill-phis! res turnAngles)
+    (map fill-path-node-control-points! res-pnodes (cycle-left-1 res-pnodes))
+    (knot-fill-path! res)
+    res))
 
 (define (knot-detect-pattern-2 k)
   (let ((kn (findf knot-node-is-pattern-2 (knot-knot-nodes k))))
     (knot-node-is-pattern-2 kn)))
+
+
 
 (define (knot-node-is-pattern-2 kn)
   (if (not (null? (cdr (knot-node-first-path-node kn))))
@@ -107,10 +139,27 @@
             #f))
       #f))
 
+;(define (knot-remove-pattern-2 k pattern)
+;  (let* ((pnodes (filter (lambda (pn) (not (member pn pattern)))
+;                         (knot-path-nodes k))))
+;    (apply make-knot (map path-node-z pnodes))))
+
 (define (knot-remove-pattern-2 k pattern)
   (let* ((pnodes (filter (lambda (pn) (not (member pn pattern)))
-                         (knot-path-nodes k))))
-    (apply make-knot (map path-node-z pnodes))))
+                         (knot-path-nodes k)))
+         (points (map path-node-z pnodes))
+         (chords (cycle-map-minus points))
+         (turnAngles (map turnAngle (cycle-right-1 chords) chords))
+         (res (apply make-naked-knot points))
+         (res-pnodes (knot-path-nodes res)))
+    (map set-path-node-chord-right! res-pnodes chords)
+    (map set-path-node-chord-left! res-pnodes (cycle-right-1 chords))
+    (map set-path-node-theta! res-pnodes (map path-node-theta pnodes))
+    
+    (knot-fill-phis! res turnAngles)
+    (map fill-path-node-control-points! res-pnodes (cycle-left-1 res-pnodes))
+    (knot-fill-path! res)
+    res))
 
 (define (knot-fill-path! k)
   (let ((z-path (new z-path%))
@@ -317,7 +366,10 @@
     (public z-move-to)
     (super-new)))
 
-(define *knot* (make-knot z1 z2 z5 z7 z6 z4 z2 z1 z3 z6 z7 z5 z4 z3))
+(define *knot* 
+  (make-knot2 '(100+200i 200+100i 200+300i 300+200i 400+100i 400+300i 500+200i)
+             '(0 1 4 6 5 3 1 0 2 5 6 4 3 2)))
+
 
 (define (start)
   (let* ((frame (new frame%
@@ -353,9 +405,28 @@
   (aux l f +inf.0 '()))
 
 (define (get-nearest-node x y aknot)
-  (minf (filter (lambda (knode) (equal? 'none (knot-node-over knode)))
-                (knot-knot-nodes aknot))
-        (lambda (k-node) (magnitude (- (knot-node-z k-node) (make-rectangular x y))))))
+  (let ((nearest (minf
+                  (knot-knot-nodes aknot)
+                  (lambda (k-node) (magnitude (- (knot-node-z k-node) (make-rectangular x y)))))))
+    (if (equal? (knot-node-over nearest) 'none)
+        nearest
+        '())))
+
+(let* ((k  (make-knot2 '(100+200i 200+100i 200+300i 300+200i 400+100i 400+300i 500+200i)
+                       '(0 1 4 6 5 3 1 0 2 5 6 4 3 2)))
+       (kn100+200i (findf (lambda (kn) (equal? (knot-node-z kn) 100+200i)) (knot-knot-nodes k))))
+  (check-equal? 
+   (get-nearest-node 
+    50 200 
+    k)
+   kn100+200i)
+  (set-knot-node-over! kn100+200i (knot-node-first-path-node kn100+200i))
+  (check-equal? 
+   (get-nearest-node 
+    50 200 
+    k)
+   '()))
+
 
 (define (draw-z-line dc z z-delta)
   (let ((z-start (- z z-delta))
@@ -380,14 +451,8 @@
   (class canvas%
     (init aknot)
     (define mknot aknot)
-    ;    (define mpath (apply knot-path (map path-node-z (knot-path-nodes mknot))))
-    (define mpath (knot-path mknot))
     (super-new)
-    (field [x 0]
-           [y 0]
-           [z 0]
-           [knode '()]
-           [pnode '()])
+    (field [pnode '()])
     
     (define/override (on-paint)
       (let ((dc (send this get-dc)))
@@ -413,32 +478,18 @@
                   (y (send event get-y))
                   (z (make-rectangular x y))
                   (knode (get-nearest-node x y mknot))
-                  (knode-z (knot-node-z knode)))
-             (when (not (equal? (- knode-z z) 0))
-               (set! pnode (get-path-node knode (angle (- z knode-z))))
-               (send this refresh)))]
-          ['left-down (set! x (send event get-x))
-                      (set! y (send event get-y))
-                      (set! knode (get-nearest-node x y mknot))
-                      (set! z (knot-node-z knode))
-                      (set! pnode '())
-                      (send this refresh)]
+                  (knode-z (if (not (null? knode)) (knot-node-z knode) '())))
+             (if (and (not (null? knode-z)) (not (equal? (- knode-z z) 0)))
+                 (set! pnode (get-path-node knode (angle (- z knode-z))))
+                 (set! pnode '()))
+             (send this refresh))]
           [(left-up)
-           (let ((mouse-z (make-rectangular
-                           (send event get-x)
-                           (send event get-y))))
-             (when (and (equal? knode 
-                                (get-nearest-node 
-                                 (send event get-x)
-                                 (send event get-y)
-                                 mknot))
-                        (not (equal? (- mouse-z z) 0)))
-               
-               (set-knot-node-over! knode (get-path-node knode (angle (- mouse-z z))))
-               (computer-play mknot)
-               (set! knode '())
-               (send this refresh)
-               ))]
+           (when (not (null? pnode))
+             (set-knot-node-over! (path-node-parent pnode) pnode)
+             (computer-play mknot)
+             (set! pnode '())
+             (send this refresh)
+             )]
           )))))
 
 (start)

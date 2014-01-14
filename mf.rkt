@@ -119,22 +119,26 @@
 
 (define (knot-detect-pattern-2 k)
   (let ((kn (findf knot-node-is-pattern-2 (knot-knot-nodes k))))
-    (knot-node-is-pattern-2 kn)))
+    (if (not kn)
+        #f
+        (knot-node-is-pattern-2 kn))))
 
 
 
 (define (knot-node-is-pattern-2 kn)
   (if (not (null? (cdr (knot-node-first-path-node kn))))
-      (let* ((next-pn (cadr (knot-node-first-path-node kn)))
-             (next-kn (path-node-parent next-pn))
-             (pn1 (knot-node-first-path-node kn))
+      (let* ((pn1 (knot-node-first-path-node kn))
+             (next-pn1 (cadr pn1))
+             (next-kn (path-node-parent next-pn1))
              (pn2 (knot-node-second-path-node kn))
              (pn3 (knot-node-first-path-node next-kn))
              (pn4 (knot-node-second-path-node next-kn)))
-        (if (or (and (equal? (cdr pn1) pn3) (equal? (cdr pn2) pn4))
-                (and (equal? (cdr pn1) pn3) (equal? (cdr pn4) pn2))
-                (and (equal? (cdr pn3) pn1) (equal? (cdr pn2) pn4))
-                (and (equal? (cdr pn3) pn1) (equal? (cdr pn4) pn2)))
+        (if (and (or (and (equal? (knot-node-over kn) pn1) (equal? (knot-node-over next-kn next-pn1)))
+                     (and (equal? (knot-node-over kn) pn2) (not (equal? (knot-node-over next-kn next-pn1)))))
+                 (or (and (equal? (cdr pn1) pn3) (equal? (cdr pn2) pn4))
+                     (and (equal? (cdr pn1) pn3) (equal? (cdr pn4) pn2))
+                     (and (equal? (cdr pn3) pn1) (equal? (cdr pn2) pn4))
+                     (and (equal? (cdr pn3) pn1) (equal? (cdr pn4) pn2))))
             (list (car pn1) (car pn3) (car pn2) (car pn4))
             #f))
       #f))
@@ -154,8 +158,10 @@
          (res-pnodes (knot-path-nodes res)))
     (map set-path-node-chord-right! res-pnodes chords)
     (map set-path-node-chord-left! res-pnodes (cycle-right-1 chords))
-    (map set-path-node-theta! res-pnodes (map path-node-theta pnodes))
-    
+    (map (lambda (pnode-to angle-from) 
+           (set-path-node-theta! pnode-to (- angle-from (angle (path-node-chord-right pnode-to)))))
+         res-pnodes 
+         (map path-node-angle pnodes))
     (knot-fill-phis! res turnAngles)
     (map fill-path-node-control-points! res-pnodes (cycle-left-1 res-pnodes))
     (knot-fill-path! res)

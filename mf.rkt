@@ -27,8 +27,12 @@
   (+ (angle (path-node-chord-right pn)) 
      (path-node-theta pn)))
 
+(define (path-node-over? pn)
+  (equal? pn (knot-node-over (path-node-parent pn))))
+
 (define (add-path-node-theta! pn d-theta)
   (set-path-node-theta! pn (+ (path-node-theta pn) d-theta)))
+
 
 (struct knot-node (z first-path-nodes second-path-nodes over) #:mutable #:transparent)
 
@@ -36,6 +40,16 @@
 (define (knot-node-second-path-node kn) (car (knot-node-second-path-nodes kn)))
 (define (knot-node-path-nodes kn) 
   (list (knot-node-first-path-node kn) (knot-node-second-path-node kn)))
+(define (knot-node-other-path-node kn pn)
+  (findf (lambda (x) (not (equal? x pn)))
+         (knot-node-path-nodes kn)))
+
+(let* ((pns '(1 2 3))
+       (kn (knot-node 'z pns (cdr pns) 'none)))
+  (check-equal?
+   (knot-node-path-nodes kn) '(1 2))
+  (check-equal?
+   (knot-node-other-path-node kn 2) 1))
 
 (struct knot (knot-nodes path-nodes path)  #:mutable #:transparent)
 
@@ -150,6 +164,16 @@
             (list (car pns1) (car pns3) (car pns2) (car pns4))
             #f))
       #f))
+
+(define (all2lists x y)
+  (list (list x y) (list y x)))
+
+(define (path-node-pattern-2? pns1-kn1 pns2-kn1 pns1-kn2 pns2-kn2)
+  (and (equal? (cdr pns1-kn1) pns1-kn2) 
+       (equal? (cdr pns2-kn1) pns2-kn2)
+       (path-node-over? (car pns1-kn1))
+       (path-node-over? (car pns1-kn2))))
+
 
 (define (knot-remove-pattern-2 k pattern)
   (let* ((pnodes (filter (lambda (pn) (not (member pn pattern)))
@@ -440,7 +464,7 @@
     50 200 
     k)
    kn100+200i)
-  (set-knot-node-over! kn100+200i (knot-node-first-path-nodes kn100+200i))
+  (set-knot-node-over! kn100+200i (knot-node-first-path-node kn100+200i))
   (check-equal? 
    (get-nearest-node 
     50 200 

@@ -415,16 +415,7 @@
              '(0 1 4 6 5 3 1 0 2 5 6 4 3 2)))
 
 
-(define (start)
-  (let* ((frame (new frame%
-                     [label "Example"]
-                     [width 600]
-                     [height 450]))
-         (canvas
-          (new kg-canvas%
-               [parent frame]
-               [aknot *knot*])))
-    (send frame show #t)))
+
 
 
 (define (get-path-node kn angle)
@@ -481,9 +472,17 @@
           (real-part z-end)
           (imag-part z-end))))
 
+(define (draw-z-point dc z)
+  (send dc draw-point (real-part z) (imag-part z)))
+
+
 (define (knot-finished? k)
   (andmap (lambda (kn) (not (equal? 'none (knot-node-over kn))))
           (knot-knot-nodes k)))
+
+(define (knot-game-over? k)
+  (equal? #f (findf (lambda (kn) (equal? (knot-node-over kn) 'none))
+                      (knot-knot-nodes k))))
 
 (define (computer-play k)
   (let ((knode (findf (lambda (kn) (equal? (knot-node-over kn) 'none))
@@ -530,10 +529,57 @@
           [(left-up)
            (when (not (null? pnode))
              (set-knot-node-over! (path-node-parent pnode) pnode)
-             (computer-play mknot)
+             (if (knot-game-over? mknot)
+                 ;(send this solve)
+                 '()
+                 (computer-play mknot))
              (set! pnode '())
              (send this refresh)
              )]
-          )))))
+          )))
+    (define (solve)
+      (let (( (knot-detect-pattern-2 mknot))
+            (dc (send this get-dc)))
+        (send this refresh)
+        (when p2
+            (let ((kn1 (path-node-parent (car p2)))
+                  (kn2 (path-node-parent (caddr p2))))
+              (send this suspend-flush)
+              (let* ((brush (send dc get-brush))
+                     (pen (send dc get-pen)))
+                (send dc set-pen "yellow" 10 'solid)
+                (draw-z-point dc (knot-node-z kn1))
+                (draw-z-point dc (knot-node-z kn2))
+                (send dc set-brush brush)
+                (send dc set-pen pen))
+              (send this flush)
+              (sleep/yield 0.1)
+              (send dc clear)
+              (knot-draw mknot dc)
+              (send this flush)
+              (sleep/yield 0.1)
+              (let* ((brush (send dc get-brush))
+                     (pen (send dc get-pen)))
+                (send dc set-pen "yellow" 10 'solid)
+                (draw-z-point dc (knot-node-z kn1))
+                (draw-z-point dc (knot-node-z kn2))
+                (send dc set-brush brush)
+                (send dc set-pen pen))
+              (send this flush)
+              (sleep/yield 0.1)
+              (send this refresh)))))
+              
+    ))
+
+(define (start)
+  (let* ((frame (new frame%
+                     [label "To knot or not to knot"]
+                     [width 600]
+                     [height 450]))
+         (canvas
+          (new kg-canvas%
+               [parent frame]
+               [aknot *knot*])))
+    (send frame show #t)))
 
 (start)

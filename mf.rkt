@@ -8,6 +8,20 @@
 (define-syntax-rule (let1 a b body ...)
     (let ((a b)) body ...))
 
+(define-syntax-rule (w/pen dc  color size body ...)
+  (let1 pen (send dc get-pen)
+        (send dc set-pen  color size 'solid)
+        body ...
+        (send dc set-pen pen)))
+
+
+(define-syntax-rule (w/brush dc size color body ...)
+  (let1 brush (send dc get-pen)
+        (send dc set-brush color size 'solid)
+        body ...
+        (send dc set-brush brush)))
+
+  
 (define (cycle-left-1 l)
   (append (cdr l) (list (car l))))
 (define left-cycle-1 cycle-left-1)
@@ -512,7 +526,10 @@
             (send dc set-pen "black" 5 'solid)
             (draw-z-line dc z (* 10 z-angle))
             (send dc set-brush brush)
-            (send dc set-pen pen)))))
+            (send dc set-pen pen)))
+;          (w/pen dc "yellow" 20
+;                 (draw-z-point dc 100+200i))
+          ))
     
     
     (define/override (on-event event)
@@ -542,32 +559,34 @@
       (let ((p2 (knot-detect-pattern-2 mknot))
             (dc (send this get-dc)))
         (send this refresh)
+        (yield)
         (when p2
             (let ((kn1 (path-node-parent (car p2)))
                   (kn2 (path-node-parent (cadr p2))))
-              (send this suspend-flush)
+              ;(send this suspend-flush)
               (let* ((brush (send dc get-brush))
                      (pen (send dc get-pen)))
-                (send dc set-pen "yellow" 10 'solid)
+                (send dc set-pen "yellow" 20 'solid)
                 (draw-z-point dc (knot-node-z kn1))
                 (draw-z-point dc (knot-node-z kn2))
                 (send dc set-brush brush)
                 (send dc set-pen pen))
               (send this flush)
-              (sleep/yield 0.1)
+              (sleep 0.5)
               (send dc clear)
               (knot-draw mknot dc)
               (send this flush)
-              (sleep/yield 0.1)
+              (sleep 0.5)
               (let* ((brush (send dc get-brush))
                      (pen (send dc get-pen)))
-                (send dc set-pen "yellow" 10 'solid)
+                (send dc set-pen "yellow" 20 'solid)
                 (draw-z-point dc (knot-node-z kn1))
                 (draw-z-point dc (knot-node-z kn2))
                 (send dc set-brush brush)
                 (send dc set-pen pen))
               (send this flush)
-              (sleep/yield 0.1)
+              (sleep 0.5)
+              (send this resume-flush)
               (send this refresh)))))
               
     ))

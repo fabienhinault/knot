@@ -5,6 +5,8 @@
 (require math/matrix)
 (require rackunit)
 
+(define-syntax-rule (let1 a b body ...)
+    (let ((a b)) body ...))
 
 (define (cycle-left-1 l)
   (append (cdr l) (list (car l))))
@@ -17,7 +19,7 @@
 (define (cycle-map-minus l)
   (cycle-map - l))
 
-;(define-syntax (_ fn . args)
+
 
 (struct path-node 
   (z chord-left chord-right psi theta phi control-left control-right parent)
@@ -530,20 +532,19 @@
            (when (not (null? pnode))
              (set-knot-node-over! (path-node-parent pnode) pnode)
              (if (knot-game-over? mknot)
-                 ;(send this solve)
-                 '()
+                 (send this solve)
                  (computer-play mknot))
              (set! pnode '())
              (send this refresh)
              )]
           )))
-    (define (solve)
-      (let (( (knot-detect-pattern-2 mknot))
+    (define/public (solve)
+      (let ((p2 (knot-detect-pattern-2 mknot))
             (dc (send this get-dc)))
         (send this refresh)
         (when p2
             (let ((kn1 (path-node-parent (car p2)))
-                  (kn2 (path-node-parent (caddr p2))))
+                  (kn2 (path-node-parent (cadr p2))))
               (send this suspend-flush)
               (let* ((brush (send dc get-brush))
                      (pen (send dc get-pen)))

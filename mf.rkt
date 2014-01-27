@@ -261,9 +261,24 @@
           (draw-z-line dc z (* 10 z-angle)))))
     (send dc set-pen pen)))
 
-
 (define (turnAngle chord1 chord2)
-  (angle (/ chord2 chord1)))
+  (-mod (* 2 pi) (angle chord2) (angle chord1)))
+; I don't know what is more efficient, this one or
+;  (angle (/ chord2 chord1)))
+
+(define (-mod x angle1 angle2)
+  (* x
+     (- ((λ(_) (- _ (floor _)))
+         (+ 1/2 (/ (- angle1 angle2) x)))
+        1/2)))
+
+(check-equal? 
+ (-mod (* 2 pi) (- (* 0.75 pi)) (* 0.75 pi))
+ (* 0.5 pi))
+
+(check-equal? 
+ (-mod 1 0 0.25)
+ -0.25)
 
 ;mf276
 (define (knot-matrix chords)
@@ -571,6 +586,7 @@
                 (draw-z-point dc (knot-node-z kn2))
                 (send dc set-brush brush)
                 (send dc set-pen pen))
+              (sleep 0.5)
               (send this flush)
               (sleep 0.5)
               (send dc clear)
@@ -587,7 +603,10 @@
               (send this flush)
               (sleep 0.5)
               (send this resume-flush)
-              (send this refresh)))))
+              (set! mknot (knot-remove-pattern-2 mknot p2))
+              (send this refresh)
+              (send this solve))
+          )))
               
     ))
 

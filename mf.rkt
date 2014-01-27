@@ -33,15 +33,22 @@
 (define (cycle-map-minus l)
   (cycle-map - l))
 
-
-
 (struct path-node 
   (z chord-left chord-right psi theta phi control-left control-right parent)
   #:mutable #:transparent)
 
 (define (path-node-angle pn)
-  (+ (angle (path-node-chord-right pn)) 
-     (path-node-theta pn)))
+  (let1 chord (path-node-chord-right pn)
+        (if (and (not (null? chord)) (not (equal? 0 chord)))
+            (+ (angle chord) 
+               (path-node-theta pn))
+            (angle (- (path-node-control-right pn) (path-node-z pn))))))
+
+(define (set-path-node-angle! pn angle-val)
+  (set-path-node-theta! 
+   pn 
+   (- angle-val 
+      (angle (path-node-chord-right pn)))))
 
 (define (path-node-over? pn)
   (equal? pn (knot-node-over (path-node-parent pn))))
@@ -191,20 +198,59 @@
        (path-node-over? (car pns1-kn2))))
 
 
+;(define (knot-remove-pattern-2 k pattern)
+;  (let* ((pnodes (filter (lambda (pn) (not (member pn pattern)))
+;                         (knot-path-nodes k)))
+;         (points (map path-node-z pnodes))
+;         (chords (cycle-map-minus points))
+;         (turnAngles (map turnAngle (cycle-right-1 chords) chords))
+;         (res (apply make-naked-knot points))
+;         (res-pnodes (knot-path-nodes res)))
+;    (map set-path-node-chord-right! res-pnodes chords)
+;    (map set-path-node-chord-left! res-pnodes (cycle-right-1 chords))
+;    (map set-path-node-angle!
+;         res-pnodes 
+;         (map path-node-angle pnodes))
+;    (map (lambda (kn-to kn-from) 
+;           (set-knot-node-over! 
+;            kn-to 
+;            (if (equal? 'none  (knot-node-over kn-from))
+;                'none
+;                (minf (knot-node-path-nodes kn-to)
+;                      (lambda (pn) (abs (- (path-node-angle pn)
+;                                           (path-node-angle (knot-node-over kn-from)))))))))
+;         (knot-knot-nodes res)
+;         (filter (lambda (kn) (not (member (knot-node-over kn) pattern)))
+;                 (knot-knot-nodes k)))
+;    (knot-fill-phis! res turnAngles)
+;    (map fill-path-node-control-points! res-pnodes (cycle-left-1 res-pnodes))
+;    (knot-fill-path! res)
+;    res))
+
 (define (knot-remove-pattern-2 k pattern)
   (let* ((pnodes (filter (lambda (pn) (not (member pn pattern)))
                          (knot-path-nodes k)))
          (points (map path-node-z pnodes))
          (chords (cycle-map-minus points))
-         (turnAngles (map turnAngle (cycle-right-1 chords) chords))
          (res (apply make-naked-knot points))
          (res-pnodes (knot-path-nodes res)))
-    (map set-path-node-chord-right! res-pnodes chords)
-    (map set-path-node-chord-left! res-pnodes (cycle-right-1 chords))
-    (map (lambda (pnode-to angle-from) 
-           (set-path-node-theta! pnode-to (- angle-from (angle (path-node-chord-right pnode-to)))))
+    
+    (map 
+         (λ (pn-to pn-from) 
+           (with-handlers 
+               ([exn:fail:contract? 
+                (λ (e) 
+                  (set-path-node-control-right! 
+                   pn-to 
+                   (path-node-control-right pn-from)))])
+             (set-path-node-angle! pn-to (path-node-angle pn-from))))
          res-pnodes 
-         (map path-node-angle pnodes))
+         pnodes)
+    
+    (map set-path-node-control-left!
+         res-pnodes
+         (map path-node-control-left pnodes))
+    
     (map (lambda (kn-to kn-from) 
            (set-knot-node-over! 
             kn-to 
@@ -216,8 +262,6 @@
          (knot-knot-nodes res)
          (filter (lambda (kn) (not (member (knot-node-over kn) pattern)))
                  (knot-knot-nodes k)))
-    (knot-fill-phis! res turnAngles)
-    (map fill-path-node-control-points! res-pnodes (cycle-left-1 res-pnodes))
     (knot-fill-path! res)
     res))
 
@@ -262,8 +306,10 @@
     (send dc set-pen pen)))
 
 (define (turnAngle chord1 chord2)
-  (-mod (* 2 pi) (angle chord2) (angle chord1)))
-; I don't know what is more efficient, this one or
+  (if (or (equal? 0 chord1) (equal? 0 chord2))
+      '()
+      (-mod (* 2 pi) (angle chord2) (angle chord1))))
+; I don't know which one is more efficient, this one or
 ;  (angle (/ chord2 chord1)))
 
 (define (-mod x angle1 angle2)

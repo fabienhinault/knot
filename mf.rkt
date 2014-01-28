@@ -265,6 +265,15 @@
     (knot-fill-path! res)
     res))
 
+(define (path-node-copy-angle pn-to pn-from)
+  (if (equal? 0 (path-node-chord-right pn-to))
+      (begin
+        (set-path-node-control-right! 
+         pn-to 
+         (path-node-control-right pn-from)))
+      (begin
+        (set-path-node-angle! pn-to (path-node-angle pn-from)))))
+
 (define (knot-fill-path! k)
   (let ((z-path (new z-path%))
         (pnodes (knot-path-nodes k)))

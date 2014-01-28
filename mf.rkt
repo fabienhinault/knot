@@ -34,7 +34,16 @@
   (cycle-map - l))
 
 (struct path-node 
-  (z chord-left chord-right psi theta phi control-left control-right parent)
+  (z 
+   chord-left ;  vector from previous node to this one
+   chord-right ; vector from this node to next one
+   psi ; turn angle from chord-left to chord-right
+   theta ; angle from chord-right to (- control-right z)
+   phi ; angle from (- z control-left) to (chord-left)
+   ;(equal? 0 (+ phi theta psi))
+   control-left 
+   control-right 
+   parent)
   #:mutable #:transparent)
 
 (define (path-node-angle pn)
@@ -230,49 +239,48 @@
 (define (knot-remove-pattern-2 k pattern)
   (let* ((pnodes (filter (lambda (pn) (not (member pn pattern)))
                          (knot-path-nodes k)))
+         (knodes (filter (lambda (kn) (not (member (knot-node-over kn) pattern)))
+                         (knot-knot-nodes k)))
          (points (map path-node-z pnodes))
          (chords (cycle-map-minus points))
          (res (apply make-naked-knot points))
          (res-pnodes (knot-path-nodes res)))
-    
-    (map 
-         (λ (pn-to pn-from) 
-           (with-handlers 
-               ([exn:fail:contract? 
-                (λ (e) 
-                  (set-path-node-control-right! 
-                   pn-to 
-                   (path-node-control-right pn-from)))])
-             (set-path-node-angle! pn-to (path-node-angle pn-from))))
-         res-pnodes 
-         pnodes)
-    
-    (map set-path-node-control-left!
-         res-pnodes
-         (map path-node-control-left pnodes))
-    
-    (map (lambda (kn-to kn-from) 
-           (set-knot-node-over! 
-            kn-to 
-            (if (equal? 'none  (knot-node-over kn-from))
-                'none
-                (minf (knot-node-path-nodes kn-to)
-                      (lambda (pn) (abs (- (path-node-angle pn)
-                                           (path-node-angle (knot-node-over kn-from)))))))))
+    (map set-path-node-chord-right! res-pnodes chords)
+    (map set-path-node-chord-left! res-pnodes (cycle-right-1 chords))
+    (map path-node-copy-angle res-pnodes pnodes)
+    (map knot-node-copy-over
          (knot-knot-nodes res)
-         (filter (lambda (kn) (not (member (knot-node-over kn) pattern)))
-                 (knot-knot-nodes k)))
+         knodes)
+    (map fill-path-node-control-points! res-pnodes (cycle-left-1 res-pnodes))
     (knot-fill-path! res)
     res))
 
 (define (path-node-copy-angle pn-to pn-from)
   (if (equal? 0 (path-node-chord-right pn-to))
-      (begin
-        (set-path-node-control-right! 
-         pn-to 
-         (path-node-control-right pn-from)))
-      (begin
-        (set-path-node-angle! pn-to (path-node-angle pn-from)))))
+      (set-path-node-control-right! 
+       pn-to 
+       (path-node-control-right pn-from))
+      (set-path-node-angle! pn-to (path-node-angle pn-from)))
+  (if (equal? 0 (path-node-chord-left pn-to))
+      (set-path-node-control-left! 
+       pn-to 
+       (path-node-control-left pn-from))
+      (set-path-node-phi! 
+       pn-to
+       (- (angle (path-node-chord-left pn-to))
+          (path-node-angle pn-from) 
+          ))))
+       
+
+(define (knot-node-copy-over kn-to kn-from)
+  (set-knot-node-over!
+   kn-to 
+   (if (equal? 'none  (knot-node-over kn-from))
+       'none
+       (minf (knot-node-path-nodes kn-to)
+             (lambda (pn) 
+               (abs (- (path-node-angle pn)
+                       (path-node-angle (knot-node-over kn-from)))))))))
 
 (define (knot-fill-path! k)
   (let ((z-path (new z-path%))
@@ -285,19 +293,41 @@
             (path-node-z pnode-k+1)))
     (set-knot-path! k z-path)))
 
-(define (fill-path-node-control-points! pnode-k pnode-k+1)
+(define (fill-path-node-control-right! pnode-k pnode-k+1)
   (set-path-node-control-right! 
    pnode-k
    (right-control-point (path-node-z pnode-k)
                         (path-node-chord-right pnode-k)
                         (path-node-theta pnode-k)
-                        (path-node-phi pnode-k+1)))
+                        (path-node-phi pnode-k+1))))
+
+(define (fill-path-node-control-left! pnode-k pnode-k+1)
   (set-path-node-control-left! 
    pnode-k+1
    (left-control-point (path-node-z pnode-k+1)
                        (path-node-chord-left pnode-k+1)
                        (path-node-theta pnode-k)
                        (path-node-phi pnode-k+1))))
+
+(define (fill-path-node-control-points! pnode-k pnode-k+1)
+  (let ((chord-left (path-node-chord-left pnode-k+1))
+        (chord-right (path-node-chord-right pnode-k)))
+    (when (not (equal? 0 chord-left))
+      (fill-path-node-control-left! pnode-k pnode-k+1))
+    (when (not (equal? 0 chord-right))
+      (fill-path-node-control-right! pnode-k pnode-k+1))))
+;  (set-path-node-control-right! 
+;   pnode-k
+;   (right-control-point (path-node-z pnode-k)
+;                        (path-node-chord-right pnode-k)
+;                        (path-node-theta pnode-k)
+;                        (path-node-phi pnode-k+1)))
+;  (set-path-node-control-left! 
+;   pnode-k+1
+;   (left-control-point (path-node-z pnode-k+1)
+;                       (path-node-chord-left pnode-k+1)
+;                       (path-node-theta pnode-k)
+;                       (path-node-phi pnode-k+1))))
 
 (define (knot-draw k dc)
   (let ((pen (send dc get-pen)))

@@ -159,16 +159,18 @@
 (define (knot-remove-loop k knot-loop)
   (let* ((pnodes (filter (lambda (pn) (not (member pn knot-loop)))
                          (knot-path-nodes k)))
+         (knodes (filter (lambda (kn) (not (member (knot-node-over kn) knot-loop)))
+                         (knot-knot-nodes k)))
          (points (map path-node-z pnodes))
          (chords (cycle-map-minus points))
-         (turnAngles (map turnAngle (cycle-right-1 chords) chords))
          (res (apply make-naked-knot points))
          (res-pnodes (knot-path-nodes res)))
     (map set-path-node-chord-right! res-pnodes chords)
     (map set-path-node-chord-left! res-pnodes (cycle-right-1 chords))
-    (map set-path-node-theta! res-pnodes (map path-node-theta pnodes))
-    
-    (knot-fill-phis! res turnAngles)
+    (map path-node-copy-angle res-pnodes pnodes)
+    (map knot-node-copy-over
+         (knot-knot-nodes res)
+         knodes)
     (map fill-path-node-control-points! res-pnodes (cycle-left-1 res-pnodes))
     (knot-fill-path! res)
     res))
@@ -567,8 +569,8 @@
       (set-knot-node-over! knode (car (knot-node-first-path-nodes knode))))))
 
 (define (path-node-control-radius-average pn)
-  (/ (+ (abs (- (path-node-control-left pn) (path-node-z pn)))
-        (abs (- (path-node-control-right pn) (path-node-z pn))))
+  (/ (+ (magnitude (- (path-node-control-left pn) (path-node-z pn)))
+        (magnitude (- (path-node-control-right pn) (path-node-z pn))))
      2))
 
 (define kg-canvas%
@@ -595,25 +597,30 @@
             (send dc set-brush brush)
             (send dc set-pen pen)))
         (when (not (null? circle))
-          (send dc draw-ellipse (real-part (car circle))
-                                (imag-part (car circle))
-                                (cadr circle)
-                                (cadr circle)))))
+          (let ((center (car circle))
+                (radius (cadr circle)))
+            (w/pen dc "black" 5 'solid
+                   (send dc draw-ellipse 
+                         (- (real-part center) (/ radius 2))
+                         (- (imag-part (car circle)) (/ radius 2))
+                         radius
+                         radius))))))
     
     
     (define/override (on-event event)
       (let ((event-type (send event get-event-type)))
         (case event-type
-          ['motion      
-           (let* ((x (send event get-x))
-                  (y (send event get-y))
-                  (z (make-rectangular x y))
-                  (knode (get-nearest-node x y mknot))
-                  (knode-z (if (not (null? knode)) (knot-node-z knode) '())))
-             (if (and (not (null? knode-z)) (not (equal? (- knode-z z) 0)))
-                 (set! pnode (get-path-node knode (angle (- z knode-z))))
-                 (set! pnode '()))
-             (send this refresh))]
+          ['motion
+           (when (not (null? mknot))
+             (let* ((x (send event get-x))
+                    (y (send event get-y))
+                    (z (make-rectangular x y))
+                    (knode (get-nearest-node x y mknot))
+                    (knode-z (if (not (null? knode)) (knot-node-z knode) '())))
+               (if (and (not (null? knode-z)) (not (equal? (- knode-z z) 0)))
+                   (set! pnode (get-path-node knode (angle (- z knode-z))))
+                   (set! pnode '()))
+               (send this refresh)))]
           [(left-up)
            (when (not (null? pnode))
              (set-knot-node-over! (path-node-parent pnode) pnode)
@@ -644,27 +651,27 @@
       (let* ((p2 (knot-detect-pattern-2 mknot))
              (p1 (knot-detect-loop mknot)))
       (cond ((knot-8? mknot)
-             (begin
-               (send this blink
-                     (λ (dc)
-                       (w/pen dc "yellow" 20 'solid
-                              (draw-z-point dc (knot-node-z (car (knot-knot-nodes mknot)))))))
-               (set! circle 
-                     (list (knot-node-z (car (knot-knot-nodes mknot)))
-                        (/ (+ (path-node-control-radius-average 
-                               (car (knot-path-nodes mknot)))
-                              (path-node-control-radius-average 
-                               (cadr (knot-path-nodes mknot))))
-                           2)))
-               (set! mknot '())
-               (send this refresh)))
+             (send this blink
+                   (λ (dc)
+                     (w/pen dc "yellow" 20 'solid
+                            (draw-z-point dc (knot-node-z (car (knot-knot-nodes mknot)))))))
+             (set! circle 
+                   (list (knot-node-z (car (knot-knot-nodes mknot)))
+                         (/ (+ (path-node-control-radius-average 
+                                (car (knot-path-nodes mknot)))
+                               (path-node-control-radius-average 
+                                (cadr (knot-path-nodes mknot))))
+                            2)))
+             (set! mknot '())
+             (send this refresh))
             (p1
              (send this blink
                    (λ (dc)
                      (w/pen dc "yellow" 20 'solid
                             (draw-z-point dc (path-node-z (car p1))))))
              (set! mknot (knot-remove-loop mknot p1))
-             (send this refresh))
+             (send this refresh)
+             (send this solve))
             (p2
              (send this blink
                    (λ (dc)
@@ -675,11 +682,7 @@
                             (draw-z-point dc (knot-node-z kn2))))))
            (set! mknot (knot-remove-pattern-2 mknot p2))
            (send this refresh)
-           (send this solve)))))
-                                  
-                                  
-
-              
+           (send this solve)))))      
     ))
 
 (define (start)

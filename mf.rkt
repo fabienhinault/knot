@@ -148,13 +148,16 @@
     (knot-fill-path! k)
     k))
 
+(define (knot-8? k)
+  (equal? 1 (length (knot-knot-nodes k))))
+
 (define (knot-detect-loop k)
   (let ((pnodes (knot-path-nodes k)))
     (findf (lambda (pns) (equal? (path-node-parent (car pns)) (path-node-parent (cadr pns))))
            (map list pnodes (cycle-left-1 pnodes)))))
 
 (define (knot-remove-loop k knot-loop)
-  (let* ((pnodes (filter (lambda (pn) (not (member knot-loop)))
+  (let* ((pnodes (filter (lambda (pn) (not (member pn knot-loop)))
                          (knot-path-nodes k)))
          (points (map path-node-z pnodes))
          (chords (cycle-map-minus points))
@@ -206,36 +209,6 @@
        (path-node-over? (car pns1-kn1))
        (path-node-over? (car pns1-kn2))))
 
-
-;(define (knot-remove-pattern-2 k pattern)
-;  (let* ((pnodes (filter (lambda (pn) (not (member pn pattern)))
-;                         (knot-path-nodes k)))
-;         (points (map path-node-z pnodes))
-;         (chords (cycle-map-minus points))
-;         (turnAngles (map turnAngle (cycle-right-1 chords) chords))
-;         (res (apply make-naked-knot points))
-;         (res-pnodes (knot-path-nodes res)))
-;    (map set-path-node-chord-right! res-pnodes chords)
-;    (map set-path-node-chord-left! res-pnodes (cycle-right-1 chords))
-;    (map set-path-node-angle!
-;         res-pnodes 
-;         (map path-node-angle pnodes))
-;    (map (lambda (kn-to kn-from) 
-;           (set-knot-node-over! 
-;            kn-to 
-;            (if (equal? 'none  (knot-node-over kn-from))
-;                'none
-;                (minf (knot-node-path-nodes kn-to)
-;                      (lambda (pn) (abs (- (path-node-angle pn)
-;                                           (path-node-angle (knot-node-over kn-from)))))))))
-;         (knot-knot-nodes res)
-;         (filter (lambda (kn) (not (member (knot-node-over kn) pattern)))
-;                 (knot-knot-nodes k)))
-;    (knot-fill-phis! res turnAngles)
-;    (map fill-path-node-control-points! res-pnodes (cycle-left-1 res-pnodes))
-;    (knot-fill-path! res)
-;    res))
-
 (define (knot-remove-pattern-2 k pattern)
   (let* ((pnodes (filter (lambda (pn) (not (member pn pattern)))
                          (knot-path-nodes k)))
@@ -270,7 +243,6 @@
        (- (angle (path-node-chord-left pn-to))
           (path-node-angle pn-from) 
           ))))
-       
 
 (define (knot-node-copy-over kn-to kn-from)
   (set-knot-node-over!
@@ -316,18 +288,6 @@
       (fill-path-node-control-left! pnode-k pnode-k+1))
     (when (not (equal? 0 chord-right))
       (fill-path-node-control-right! pnode-k pnode-k+1))))
-;  (set-path-node-control-right! 
-;   pnode-k
-;   (right-control-point (path-node-z pnode-k)
-;                        (path-node-chord-right pnode-k)
-;                        (path-node-theta pnode-k)
-;                        (path-node-phi pnode-k+1)))
-;  (set-path-node-control-left! 
-;   pnode-k+1
-;   (left-control-point (path-node-z pnode-k+1)
-;                       (path-node-chord-left pnode-k+1)
-;                       (path-node-theta pnode-k)
-;                       (path-node-phi pnode-k+1))))
 
 (define (knot-draw k dc)
   (let ((pen (send dc get-pen)))
@@ -606,16 +566,23 @@
     (when knode
       (set-knot-node-over! knode (car (knot-node-first-path-nodes knode))))))
 
+(define (path-node-control-radius-average pn)
+  (/ (+ (abs (- (path-node-control-left pn) (path-node-z pn)))
+        (abs (- (path-node-control-right pn) (path-node-z pn))))
+     2))
+
 (define kg-canvas%
   (class canvas%
     (init aknot)
     (define mknot aknot)
     (super-new)
-    (field [pnode '()])
+    (field [pnode '()]
+           [circle '()])
     
     (define/override (on-paint)
       (let ((dc (send this get-dc)))
-        (knot-draw mknot dc)
+        (when (not (null? mknot))
+          (knot-draw mknot dc))
         (when (not (null? pnode))
           (let* ((brush (send dc get-brush))
                  (pen (send dc get-pen))
@@ -627,9 +594,11 @@
             (draw-z-line dc z (* 10 z-angle))
             (send dc set-brush brush)
             (send dc set-pen pen)))
-;          (w/pen dc "yellow" 20
-;                 (draw-z-point dc 100+200i))
-          ))
+        (when (not (null? circle))
+          (send dc draw-ellipse (real-part (car circle))
+                                (imag-part (car circle))
+                                (cadr circle)
+                                (cadr circle)))))
     
     
     (define/override (on-event event)
@@ -655,43 +624,61 @@
              (send this refresh)
              )]
           )))
+    
+    (define/public (blink f)
+      (let1 dc (send this get-dc)
+            (f dc)
+            (sleep 0.5)
+            (send this flush)
+            (send dc clear)
+            (knot-draw mknot dc)
+            (sleep 0.5)
+            (send this flush)
+            (f dc)           
+            (sleep 0.5)))
+    
+    
     (define/public (solve)
-      (let ((p2 (knot-detect-pattern-2 mknot))
-            (dc (send this get-dc)))
-        (send this refresh)
-        (yield)
-        (when p2
-            (let ((kn1 (path-node-parent (car p2)))
-                  (kn2 (path-node-parent (cadr p2))))
-              ;(send this suspend-flush)
-              (let* ((brush (send dc get-brush))
-                     (pen (send dc get-pen)))
-                (send dc set-pen "yellow" 20 'solid)
-                (draw-z-point dc (knot-node-z kn1))
-                (draw-z-point dc (knot-node-z kn2))
-                (send dc set-brush brush)
-                (send dc set-pen pen))
-              (sleep 0.5)
-              (send this flush)
-              (sleep 0.5)
-              (send dc clear)
-              (knot-draw mknot dc)
-              (send this flush)
-              (sleep 0.5)
-              (let* ((brush (send dc get-brush))
-                     (pen (send dc get-pen)))
-                (send dc set-pen "yellow" 20 'solid)
-                (draw-z-point dc (knot-node-z kn1))
-                (draw-z-point dc (knot-node-z kn2))
-                (send dc set-brush brush)
-                (send dc set-pen pen))
-              (send this flush)
-              (sleep 0.5)
-              (send this resume-flush)
-              (set! mknot (knot-remove-pattern-2 mknot p2))
-              (send this refresh)
-              (send this solve))
-          )))
+      (send this refresh)
+      (yield)
+      (let* ((p2 (knot-detect-pattern-2 mknot))
+             (p1 (knot-detect-loop mknot)))
+      (cond ((knot-8? mknot)
+             (begin
+               (send this blink
+                     (λ (dc)
+                       (w/pen dc "yellow" 20 'solid
+                              (draw-z-point dc (knot-node-z (car (knot-knot-nodes mknot)))))))
+               (set! circle 
+                     (list (knot-node-z (car (knot-knot-nodes mknot)))
+                        (/ (+ (path-node-control-radius-average 
+                               (car (knot-path-nodes mknot)))
+                              (path-node-control-radius-average 
+                               (cadr (knot-path-nodes mknot))))
+                           2)))
+               (set! mknot '())
+               (send this refresh)))
+            (p1
+             (send this blink
+                   (λ (dc)
+                     (w/pen dc "yellow" 20 'solid
+                            (draw-z-point dc (path-node-z (car p1))))))
+             (set! mknot (knot-remove-loop mknot p1))
+             (send this refresh))
+            (p2
+             (send this blink
+                   (λ (dc)
+                   (let ((kn1 (path-node-parent (car p2)))
+                         (kn2 (path-node-parent (cadr p2))))
+                     (w/pen dc "yellow" 20 'solid  
+                            (draw-z-point dc (knot-node-z kn1))
+                            (draw-z-point dc (knot-node-z kn2))))))
+           (set! mknot (knot-remove-pattern-2 mknot p2))
+           (send this refresh)
+           (send this solve)))))
+                                  
+                                  
+
               
     ))
 

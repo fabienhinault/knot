@@ -156,32 +156,11 @@
     (findf (lambda (pns) (equal? (path-node-parent (car pns)) (path-node-parent (cadr pns))))
            (map list pnodes (cycle-left-1 pnodes)))))
 
-(define (knot-remove-loop k knot-loop)
-  (let* ((pnodes (filter (lambda (pn) (not (member pn knot-loop)))
-                         (knot-path-nodes k)))
-         (knodes (filter (lambda (kn) (not (member (knot-node-over kn) knot-loop)))
-                         (knot-knot-nodes k)))
-         (points (map path-node-z pnodes))
-         (chords (cycle-map-minus points))
-         (res (apply make-naked-knot points))
-         (res-pnodes (knot-path-nodes res)))
-    (map set-path-node-chord-right! res-pnodes chords)
-    (map set-path-node-chord-left! res-pnodes (cycle-right-1 chords))
-    (map path-node-copy-angle res-pnodes pnodes)
-    (map knot-node-copy-over
-         (knot-knot-nodes res)
-         knodes)
-    (map fill-path-node-control-points! res-pnodes (cycle-left-1 res-pnodes))
-    (knot-fill-path! res)
-    res))
-
 (define (knot-detect-pattern-2 k)
   (let ((kn (findf knot-node-is-pattern-2 (knot-knot-nodes k))))
     (if (not kn)
         #f
         (knot-node-is-pattern-2 kn))))
-
-
 
 (define (knot-node-is-pattern-2 kn)
   (if (not (null? (cdr (knot-node-first-path-nodes kn))))
@@ -211,7 +190,7 @@
        (path-node-over? (car pns1-kn1))
        (path-node-over? (car pns1-kn2))))
 
-(define (knot-remove-pattern-2 k pattern)
+(define (knot-remove-pattern k pattern)
   (let* ((pnodes (filter (lambda (pn) (not (member pn pattern)))
                          (knot-path-nodes k)))
          (knodes (filter (lambda (kn) (not (member (knot-node-over kn) pattern)))
@@ -300,8 +279,8 @@
         (let* ((pnode (knot-node-over knode))
                (z (path-node-z pnode))
                (z-angle (make-polar 1 (path-node-angle pnode))))
-          (send dc set-pen "white" 20 'solid)
-          (draw-z-line dc z z-angle)
+          (send dc set-pen "white" 15 'solid)
+          (draw-z-line dc z (* 5 z-angle))
           (send dc set-pen "black" 5 'solid)
           (draw-z-line dc z (* 10 z-angle)))))
     (send dc set-pen pen)))
@@ -415,8 +394,6 @@
     (map set-path-node-chord-right! pnodes chords)
     (map set-path-node-chord-left! pnodes (cycle-right-1 chords))))
 
-
-
 ;mf116
 (define (velocity theta phi)
   (let ((ct (cos theta))
@@ -433,10 +410,6 @@
             (+ 1 
                (* 0.5 (- rt5 1) ct)
                (* 0.5 (- 3 rt5) cf))))))
-
-
-
-
 
 (define (tweak-angles angle1 angle2)
   (let* ((offset (- angle2 angle1))
@@ -468,8 +441,6 @@
     (add-path-node-theta! pn1 (+ tweak))
     (add-path-node-theta! pn2 (- tweak))))
 
-
-
 (define z-path%
   (class dc-path%
     (define (z-curve-to z1 z2 z3)
@@ -491,10 +462,6 @@
 (define *knot* 
   (make-knot2 '(100+200i 200+100i 200+300i 300+200i 400+100i 400+300i 500+200i)
              '(0 1 4 6 5 3 1 0 2 5 6 4 3 2)))
-
-
-
-
 
 (define (get-path-node kn angle)
   (let* ((pn1 (car (knot-node-first-path-nodes kn)))
@@ -562,11 +529,32 @@
   (equal? #f (findf (lambda (kn) (equal? (knot-node-over kn) 'none))
                       (knot-knot-nodes k))))
 
-(define (computer-play k)
+(define (dumb-computer-play k)
   (let ((knode (findf (lambda (kn) (equal? (knot-node-over kn) 'none))
                       (knot-knot-nodes k))))
     (when knode
       (set-knot-node-over! knode (car (knot-node-first-path-nodes knode))))))
+
+(define (random-list-ref l)
+  (let1 len (length l)
+        (list-ref l (random len))))
+
+(define (random-computer-play k)
+  (let1 
+   knode
+   (random-list-ref 
+    (filter 
+     (lambda (kn) (equal? (knot-node-over kn) 'none))
+     (knot-knot-nodes k)))
+   (when knode
+      (set-knot-node-over! 
+       knode 
+       (car ((if (equal? 0 (random 2))
+                knot-node-first-path-nodes
+                knot-node-second-path-nodes)
+             knode))))))
+
+(define (2-players-play k) '())
 
 (define (path-node-control-radius-average pn)
   (/ (+ (magnitude (- (path-node-control-left pn) (path-node-z pn)))
@@ -575,8 +563,9 @@
 
 (define kg-canvas%
   (class canvas%
-    (init aknot)
+    (init aknot 2nd-player-play)
     (define mknot aknot)
+    (define m2nd-player-play 2nd-player-play)
     (super-new)
     (field [pnode '()]
            [circle '()])
@@ -626,7 +615,7 @@
              (set-knot-node-over! (path-node-parent pnode) pnode)
              (if (knot-game-over? mknot)
                  (send this solve)
-                 (computer-play mknot))
+                 (m2nd-player-play mknot))
              (set! pnode '())
              (send this refresh)
              )]
@@ -669,7 +658,7 @@
                    (λ (dc)
                      (w/pen dc "yellow" 20 'solid
                             (draw-z-point dc (path-node-z (car p1))))))
-             (set! mknot (knot-remove-loop mknot p1))
+             (set! mknot (knot-remove-pattern mknot p1))
              (send this refresh)
              (send this solve))
             (p2
@@ -680,20 +669,35 @@
                      (w/pen dc "yellow" 20 'solid  
                             (draw-z-point dc (knot-node-z kn1))
                             (draw-z-point dc (knot-node-z kn2))))))
-           (set! mknot (knot-remove-pattern-2 mknot p2))
+           (set! mknot (knot-remove-pattern mknot p2))
            (send this refresh)
            (send this solve)))))      
     ))
 
-(define (start)
+(define (start 2nd-player-play)
   (let* ((frame (new frame%
                      [label "To knot or not to knot"]
                      [width 600]
                      [height 450]))
+         (menu-bar (new menu-bar%
+                      (parent frame)))
          (canvas
           (new kg-canvas%
                [parent frame]
-               [aknot *knot*])))
-    (send frame show #t)))
+               [aknot (make-knot2 
+                       '(100+200i 
+                         200+100i 
+                         200+300i 
+                         300+200i 
+                         400+100i 
+                         400+300i 
+                         500+200i)
+                       '(0 1 4 6 5 3 1 0 2 5 6 4 3 2))]
+               [2nd-player-play 2nd-player-play])))
+    (new menu%
+         (label "&Game")
+         (parent menu-bar))
+    (send frame show #t)
+    frame))
 
-(start)
+(define frame (start 2-players-play))

@@ -33,6 +33,13 @@
 (define (cycle-map-minus l)
   (cycle-map - l))
 
+(define (make-cycle l)
+  (let* ([ph (make-placeholder #f)]
+         [x (append l (list ph))])
+    (placeholder-set! ph x)
+    (make-reader-graph x)))
+
+
 (struct path-node 
   (z 
    chord-left ;  vector from previous node to this one
@@ -65,6 +72,11 @@
 (define (add-path-node-theta! pn d-theta)
   (set-path-node-theta! pn (+ (path-node-theta pn) d-theta)))
 
+(define (path-node-next pn-cur pns)
+  (let1 pns-cur (member pns pn-cur)
+        (if (not (null? (cdr pns-cur)))
+            (cadr pns-cur)
+            (car pns))))
 
 (struct knot-node (z first-path-nodes second-path-nodes over) #:mutable #:transparent)
 
@@ -83,30 +95,32 @@
   (check-equal?
    (knot-node-other-path-node kn 2) 1))
 
-(struct knot (knot-nodes path-nodes path)  #:mutable #:transparent)
+(struct knot (knot-nodes path-nodes path-nodes-cycle path)  #:mutable #:transparent)
 
 (define (make-naked-knot . points)
-  (define (make-knot-node pnodes)
+  (define (make-knot-node pnodes cycle)
     (cond ((null? pnodes) '())
           (else
            (let* ((z (path-node-z (car pnodes)))
-                  (pnodes2 (memf (lambda (pn) (equal? z (path-node-z pn))) (cdr pnodes)))
-                  (knode (knot-node z pnodes pnodes2 'none)))
+                  (cycle2 (memf (lambda (pn) (equal? z (path-node-z pn))) (cdr cycle)))
+                  (knode (knot-node z cycle cycle2 'none)))
              (set-path-node-parent! (car pnodes) knode)
-             (set-path-node-parent! (car pnodes2) knode)
+             (set-path-node-parent! (car cycle2) knode)
              knode))))
   
-  (define (make-knot-nodes pnodes)
+  (define (make-knot-nodes pnodes cycle)
     (cond ((null? pnodes) '())
           ((not (null? (path-node-parent (car pnodes))))
-           (make-knot-nodes (cdr pnodes)))
+           (make-knot-nodes (cdr pnodes) (cdr cycle)))
           (else        
-           (cons (make-knot-node pnodes) (make-knot-nodes (cdr pnodes))))))
+           (cons (make-knot-node pnodes cycle) 
+                 (make-knot-nodes (cdr pnodes) (cdr cycle))))))
   
-  (let ((path-nodes (map 
+  (let* ((path-nodes (map 
                      (lambda (z) (path-node z '() '() '() '() '() '() '() '()))
-                     points)))
-    (knot (make-knot-nodes path-nodes) path-nodes '())))
+                     points))
+         (cycle (make-cycle path-nodes)))
+    (knot (make-knot-nodes path-nodes cycle) path-nodes cycle '())))
 
 
 ; many things borrowed from
@@ -319,13 +333,6 @@
 (define z6 400+300i)
 (define z7 500+200i)
 
-
-;(define z1 100+200i )
-;(define z2 300+200i )
-;(define z3 200+258i)
-;(define z4 200+373i )
-
-
 (define (knot-fill-chords! k) 
   (let* ((pnodes (knot-path-nodes k))
          (zs (map path-node-z pnodes))
@@ -412,11 +419,11 @@
 
 (define (knot-detect-pattern-2 k)
   (let* ((pnodes (knot-path-nodes k))
-         (pns (findf path-node-pattern-2?
+         (pns-found (findf (lambda (pns) (path-node-pattern-2? pns pnodes))
                      (map list pnodes (cycle-left-1 pnodes)))))
-    (if (not pns)
+    (if (not pns-found)
         #f
-        (path-node-pattern-2? pns))))
+        (path-node-pattern-2? pns-found pnodes))))
 
 ;(define (knot-node-is-pattern-2 kn)
 ;  (if (not (null? (cdr (knot-node-first-path-nodes kn))))
@@ -437,7 +444,7 @@
 ;            #f))
 ;      #f))
 
-(define (path-node-pattern-2? pn1pn2)
+(define (path-node-pattern-2? pn1pn2 pns)
   (let* ((pn1 (car pn1pn2))
          (pn2 (cadr pn1pn2))
          (kn1 (path-node-parent pn1))
@@ -454,10 +461,14 @@
                      (equal? kn2-over pn2))
              ; find and elegant way to use a combinatorics function
              ; maybe all these tests are not usefull
-             (or (and (equal? (cdr pns11) pns21) (equal? (cdr pns12) pns22))
-                 (and (equal? (cdr pns11) pns21) (equal? (cdr pns22) pns12))
-                 (and (equal? (cdr pns21) pns11) (equal? (cdr pns12) pns22))
-                 (and (equal? (cdr pns21) pns11) (equal? (cdr pns22) pns12))))
+             (or (and (equal? (cdr pns11) pns21)
+                      (equal? (cdr pns12) pns22))
+                 (and (equal? (cdr pns11) pns21)
+                      (equal? (cdr pns22) pns12))
+                 (and (equal? (cdr pns21) pns11)
+                      (equal? (cdr pns12) pns22))
+                 (and (equal? (cdr pns21) pns11)
+                      (equal? (cdr pns22) pns12))))
         (list (car pns11) (car pns21) (car pns12) (car pns22))
         #f)))
 
@@ -500,9 +511,9 @@
 (let* ((k (make-shadow-7-4))
        (kns (knot-knot-nodes k))
        (kn0 (list-ref kns 0))
-       (kn2 (list-ref kns 2)))
+       (kn2 (findf (lambda (kn) (equal? 200+300i (knot-node-z kn))) kns)))
   (set-knot-node-over! kn0 (knot-node-second-path-node kn0))
-  (set-knot-node-over! kn2 (knot-node-second-path-node kn2))
+  (set-knot-node-over! kn2 (knot-node-first-path-node kn2))
   (check-not-false
    (knot-detect-pattern-2 k)))
 

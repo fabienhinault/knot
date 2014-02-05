@@ -51,7 +51,8 @@
    control-left 
    control-right 
    parent)
-  #:mutable #:transparent)
+  #:mutable
+  #:transparent)
 
 (define (path-node-angle pn)
   (let1 chord (path-node-chord-right pn)
@@ -73,7 +74,7 @@
   (set-path-node-theta! pn (+ (path-node-theta pn) d-theta)))
 
 (define (path-node-next pn-cur pns)
-  (let1 pns-cur (member pns pn-cur)
+  (let1 pns-cur (member pn-cur pns)
         (if (not (null? (cdr pns-cur)))
             (cadr pns-cur)
             (car pns))))
@@ -95,32 +96,31 @@
   (check-equal?
    (knot-node-other-path-node kn 2) 1))
 
-(struct knot (knot-nodes path-nodes path-nodes-cycle path)  #:mutable #:transparent)
+(struct knot (knot-nodes path-nodes path)  #:mutable #:transparent)
 
 (define (make-naked-knot . points)
-  (define (make-knot-node pnodes cycle)
+  (define (make-knot-node pnodes)
     (cond ((null? pnodes) '())
           (else
            (let* ((z (path-node-z (car pnodes)))
-                  (cycle2 (memf (lambda (pn) (equal? z (path-node-z pn))) (cdr cycle)))
-                  (knode (knot-node z cycle cycle2 'none)))
+                  (pnodes2 (memf (lambda (pn) (equal? z (path-node-z pn))) (cdr pnodes)))
+                  (knode (knot-node z pnodes pnodes2 'none)))
              (set-path-node-parent! (car pnodes) knode)
-             (set-path-node-parent! (car cycle2) knode)
+             (set-path-node-parent! (car pnodes2) knode)
              knode))))
   
-  (define (make-knot-nodes pnodes cycle)
+  (define (make-knot-nodes pnodes)
     (cond ((null? pnodes) '())
           ((not (null? (path-node-parent (car pnodes))))
-           (make-knot-nodes (cdr pnodes) (cdr cycle)))
+           (make-knot-nodes (cdr pnodes)))
           (else        
-           (cons (make-knot-node pnodes cycle) 
-                 (make-knot-nodes (cdr pnodes) (cdr cycle))))))
+           (cons (make-knot-node pnodes) 
+                 (make-knot-nodes (cdr pnodes))))))
   
   (let* ((path-nodes (map 
                      (lambda (z) (path-node z '() '() '() '() '() '() '() '()))
-                     points))
-         (cycle (make-cycle path-nodes)))
-    (knot (make-knot-nodes path-nodes cycle) path-nodes cycle '())))
+                     points)))
+    (knot (make-knot-nodes path-nodes) path-nodes '())))
 
 
 ; many things borrowed from
@@ -425,51 +425,40 @@
         #f
         (path-node-pattern-2? pns-found pnodes))))
 
-;(define (knot-node-is-pattern-2 kn)
-;  (if (not (null? (cdr (knot-node-first-path-nodes kn))))
-;      (let* ((pns1 (knot-node-first-path-nodes kn))
-;             (next-pn1 (cadr pns1))
-;             (next-kn (path-node-parent next-pn1))
-;             (pns2 (knot-node-second-path-nodes kn))
-;             (pns3 (knot-node-first-path-nodes next-kn))
-;             (pns4 (knot-node-second-path-nodes next-kn)))
-;        (if (and (or (and (equal? (knot-node-over kn) (car pns1)) (equal? (knot-node-over next-kn) next-pn1))
-;                     (and (equal? (knot-node-over kn) (car pns2)) (not (equal? (knot-node-over next-kn) next-pn1))))
-;                 ; find and elegant way to use a combinatorics function
-;                 (or (and (equal? (cdr pns1) pns3) (equal? (cdr pns2) pns4))
-;                     (and (equal? (cdr pns1) pns3) (equal? (cdr pns4) pns2))
-;                     (and (equal? (cdr pns3) pns1) (equal? (cdr pns2) pns4))
-;                     (and (equal? (cdr pns3) pns1) (equal? (cdr pns4) pns2))))
-;            (list (car pns1) (car pns3) (car pns2) (car pns4))
-;            #f))
-;      #f))
-
 (define (path-node-pattern-2? pn1pn2 pns)
   (let* ((pn1 (car pn1pn2))
          (pn2 (cadr pn1pn2))
          (kn1 (path-node-parent pn1))
          (kn2 (path-node-parent pn2))
-         (pns11 (knot-node-first-path-nodes kn1))
-         (pns12 (knot-node-second-path-nodes kn1))
-         (pns21 (knot-node-first-path-nodes kn2))
-         (pns22 (knot-node-second-path-nodes kn2))
+         (pn11 (knot-node-first-path-node kn1))
+         (pn12 (knot-node-second-path-node kn1))
+         (pn21 (knot-node-first-path-node kn2))
+         (pn22 (knot-node-second-path-node kn2))
          (kn1-over (knot-node-over kn1))
          (kn2-over (knot-node-over kn2)))
     (if (and (not (equal? kn1-over 'none))
              (not (equal? kn2-over 'none))
              (equal? (equal? kn1-over pn1) 
                      (equal? kn2-over pn2))
-             ; find and elegant way to use a combinatorics function
+             ;TODO: find and elegant way to use a combinatorics function
              ; maybe all these tests are not usefull
-             (or (and (equal? (cdr pns11) pns21)
-                      (equal? (cdr pns12) pns22))
-                 (and (equal? (cdr pns11) pns21)
-                      (equal? (cdr pns22) pns12))
-                 (and (equal? (cdr pns21) pns11)
-                      (equal? (cdr pns12) pns22))
-                 (and (equal? (cdr pns21) pns11)
-                      (equal? (cdr pns22) pns12))))
-        (list (car pns11) (car pns21) (car pns12) (car pns22))
+             (or (and (equal? (path-node-next pn11 pns) pn21)
+                      (equal? (path-node-next pn12 pns) pn22))
+                 (and (equal? (path-node-next pn11 pns) pn21)
+                      (equal? (path-node-next pn22 pns) pn12))
+                 (and (equal? (path-node-next pn21 pns) pn11)
+                      (equal? (path-node-next pn12 pns) pn22))
+                 (and (equal? (path-node-next pn21 pns) pn11)
+                      (equal? (path-node-next pn22 pns) pn12))
+                 (and (equal? (path-node-next pn11 pns) pn22)
+                      (equal? (path-node-next pn12 pns) pn21))
+                 (and (equal? (path-node-next pn11 pns) pn22)
+                      (equal? (path-node-next pn21 pns) pn12))
+                 (and (equal? (path-node-next pn22 pns) pn11)
+                      (equal? (path-node-next pn12 pns) pn21))
+                 (and (equal? (path-node-next pn22 pns) pn11)
+                      (equal? (path-node-next pn21 pns) pn12))))
+        (list pn11 pn21 pn12 pn22)
         #f)))
 
 (define (make-shadow-7-4)

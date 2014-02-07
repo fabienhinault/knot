@@ -4,6 +4,7 @@
 (require racket/draw)
 (require math/matrix)
 (require rackunit)
+(require srfi/29)
 
 (define-syntax-rule (let1 a b body ...)
     (let ((a b)) body ...))
@@ -745,9 +746,19 @@
            (send this solve)))))      
     ))
 
+(declare-bundle! '(knot en) '((Game . "Game")
+                       (New_game . "New game")
+                       (Language . "Language")
+                       (English . "English")
+                       (French . "French")))
+(declare-bundle! '(knot fr) '((Game . "Jeu")
+                       (New_game . "Nouvelle partie")
+                       (Language . "Langue")
+                       (English . "Anglais")
+                       (French . "Français")))
 
-
-(define (start 2nd-player-play make-shadow)
+(define (start 2nd-player-play make-shadow lang)
+  (current-language lang)
   (let* ((frame (new frame%
                      [label "To knot or not to knot"]
                      [width 600]
@@ -760,9 +771,9 @@
                [aknot (make-shadow)]
                [2nd-player-play 2nd-player-play])))
     (new menu%
-         (label "&Game")
+         (label (localized-template 'knot 'Game))
          (parent menu-bar))
     (send frame show #t)
     frame))
 
-(define frame (start 2-players-play make-shadow-7-4))
+(define frame (start 2-players-play make-shadow-7-4 'fr))

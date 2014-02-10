@@ -636,10 +636,10 @@
 (define kg-canvas%
   (class canvas%
     (init aknot 2nd-player-play)
-    (define mknot aknot)
     (define m2nd-player-play 2nd-player-play)
     (super-new)
-    (field [pnode '()]
+    (field [mknot aknot]
+           [pnode '()]
            [circle '()])
     
     (define/override (on-paint)
@@ -769,10 +769,18 @@
           (new kg-canvas%
                [parent frame]
                [aknot (make-shadow)]
-               [2nd-player-play 2nd-player-play])))
-    (new menu%
-         (label (localized-template 'knot 'Game))
-         (parent menu-bar))
+               [2nd-player-play 2nd-player-play]))
+         (menu-game (new menu%
+              (label (localized-template 'knot 'Game))
+              (parent menu-bar)))
+         (item-new-game 
+          (new menu-item%
+               [label (localized-template 'knot 'New_game)]
+               [parent menu-game]
+               [callback 
+                (lambda (mi ce) 
+                  ((class-field-mutator kg-canvas% mknot) 
+                   canvas (make-shadow)))])))                             
     (send frame show #t)
     frame))
 

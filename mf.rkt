@@ -382,8 +382,8 @@
  #true)
 
 (define (knot-node-tweak-thetas! kn)
-  (let* ((pn1 (car (knot-node-first-path-nodes kn)))
-         (pn2 (car (knot-node-second-path-nodes kn)))
+  (let* ((pn1 (knot-node-first-path-node kn))
+         (pn2 (knot-node-second-path-node kn))
          (tweak (tweak-angles  (path-node-angle pn1) (path-node-angle pn2))))
     (add-path-node-theta! pn1 (+ tweak))
     (add-path-node-theta! pn2 (- tweak))))
@@ -536,9 +536,9 @@
     res))
 
 (define (get-path-node kn angle)
-  (let* ((pn1 (car (knot-node-first-path-nodes kn)))
+  (let* ((pn1 (knot-node-first-path-node kn))
          (angle1 (path-node-angle pn1))
-         (pn2 (car (knot-node-second-path-nodes kn)))
+         (pn2 (knot-node-second-path-node kn))
          (angle2 (path-node-angle pn2)))
     (if (< (abs (cos (- angle angle1)))
            (abs (cos (- angle angle2))))
@@ -605,7 +605,7 @@
   (let ((knode (findf (lambda (kn) (equal? (knot-node-over kn) 'none))
                       (knot-knot-nodes k))))
     (when knode
-      (set-knot-node-over! knode (car (knot-node-first-path-nodes knode))))))
+      (set-knot-node-over! knode (knot-node-first-path-node knode)))))
 
 (define (random-list-ref l)
   (let1 len (length l)
@@ -621,10 +621,10 @@
    (when knode
       (set-knot-node-over! 
        knode 
-       (car ((if (equal? 0 (random 2))
-                knot-node-first-path-nodes
-                knot-node-second-path-nodes)
-             knode))))))
+       ((if (equal? 0 (random 2))
+                knot-node-first-path-node
+                knot-node-second-path-node)
+             knode)))))
 
 (define (2-players-play k) '())
 

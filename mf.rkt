@@ -80,10 +80,8 @@
             (cadr pns-cur)
             (car pns))))
 
-(struct knot-node (z first-path-nodes second-path-nodes over) #:mutable #:transparent)
+(struct knot-node (z first-path-node second-path-node over) #:mutable #:transparent)
 
-(define (knot-node-first-path-node kn) (car (knot-node-first-path-nodes kn)))
-(define (knot-node-second-path-node kn) (car (knot-node-second-path-nodes kn)))
 (define (knot-node-path-nodes kn) 
   (list (knot-node-first-path-node kn) (knot-node-second-path-node kn)))
 (define (knot-node-other-path-node kn pn)
@@ -91,7 +89,7 @@
          (knot-node-path-nodes kn)))
 
 (let* ((pns '(1 2 3))
-       (kn (knot-node 'z pns (cdr pns) 'none)))
+       (kn (knot-node 'z (car pns) (cadr pns) 'none)))
   (check-equal?
    (knot-node-path-nodes kn) '(1 2))
   (check-equal?
@@ -105,7 +103,7 @@
           (else
            (let* ((z (path-node-z (car pnodes)))
                   (pnodes2 (memf (lambda (pn) (equal? z (path-node-z pn))) (cdr pnodes)))
-                  (knode (knot-node z pnodes pnodes2 'none)))
+                  (knode (knot-node z (car pnodes) (car pnodes2) 'none)))
              (set-path-node-parent! (car pnodes) knode)
              (set-path-node-parent! (car pnodes2) knode)
              knode))))
@@ -780,7 +778,10 @@
                [callback 
                 (lambda (mi ce) 
                   ((class-field-mutator kg-canvas% mknot) 
-                   canvas (make-shadow)))])))                             
+                   canvas (make-shadow))
+                  ((class-field-mutator kg-canvas% circle) 
+                   canvas '())
+                  )])))                             
     (send frame show #t)
     frame))
 

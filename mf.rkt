@@ -593,10 +593,31 @@
 ;;;
 
 (struct game
-  knot
-  player1
-  player2
-  state)
+  (knot
+   player1
+   player2
+   current-player
+   solver)
+  #:mutable
+  #:transparent)
+
+(define (game-start g)
+  ((game-current-player g) g))
+
+(define (game-play g knode pnode)
+  (set-knot-node-over! knode pnode)
+  (if (knot-game-over? (game-knot g))
+      ((game-solver g) (game-knot g))
+      (begin
+        (change-game-current-player! g)
+        ((game-current-player g) g))))
+
+(define (change-game-current-player! g)
+  (set-game-current-player! 
+   g 
+   (if (equal? (game-player1 g) (game-current-player g))
+       (game-player2 g)
+       (game-player1 g))))
 
 
 
@@ -608,27 +629,23 @@
 
 
 
-
-
-
-
-
-
-(define (dumb-computer-play k)
-  (let ((knode (findf (lambda (kn) (equal? (knot-node-over kn) 'none))
+(define (dumb-computer-play g)
+  (let* ((k (game-knot g))
+         (knode (findf (lambda (kn) (equal? (knot-node-over kn) 'none))
                       (knot-knot-nodes k))))
     (when knode
-      (set-knot-node-over! knode (knot-node-first-path-node knode)))))
+      (game-play g knode (knot-node-first-path-node knode)))))
 
-(define (random-computer-play k)
-  (let1 
-   knode
-   (random-list-ref 
-    (filter 
-     (lambda (kn) (equal? (knot-node-over kn) 'none))
-     (knot-knot-nodes k)))
+(define (random-computer-play g)
+  (let* ((k (game-knot g))
+         (knode
+          (random-list-ref 
+           (filter 
+            (lambda (kn) (equal? (knot-node-over kn) 'none))
+            (knot-knot-nodes k)))))
    (when knode
-      (set-knot-node-over! 
+      (game-play
+       g
        knode 
        ((if (equal? 0 (random 2))
                 knot-node-first-path-node
@@ -637,9 +654,12 @@
 
 (define (2-players-play k) '())
 
+(define (re-play)
+  (eval (read)))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;view
+;graphic view
 
 
 (define (draw-z-line dc z z-delta)
@@ -659,10 +679,10 @@
 
 (define kg-canvas%
   (class canvas%
-    (init aknot 2nd-player-play)
-    (define m2nd-player-play 2nd-player-play)
+    (init agame)
     (super-new)
-    (field [mknot aknot]
+    (field [game agame]
+           [mknot (game-knot agame)]
            [pnode '()]
            [circle '()])
     
@@ -708,10 +728,10 @@
                (send this refresh)))]
           [(left-up)
            (when (not (null? pnode))
-             (set-knot-node-over! (path-node-parent pnode) pnode)
-             (if (knot-game-over? mknot)
-                 (send this solve)
-                 (m2nd-player-play mknot))
+             (game-play game (path-node-parent pnode) pnode)
+;             (if (knot-game-over? mknot)
+;                 (send this solve)
+;                 (m2nd-player-play mknot))
              (set! pnode '())
              (send this refresh)
              )]
@@ -731,6 +751,7 @@
     
     
     (define/public (solve)
+      (set! pnode '())
       (send this refresh)
       (yield)
       (let* ((p2 (knot-detect-pattern-2 mknot))
@@ -781,9 +802,10 @@
                        (English . "Anglais")
                        (French . "Français")))
 
-(define (start 2nd-player-play make-shadow lang)
+(define (start player1 player2 make-shadow lang)
   (current-language lang)
-  (let* ((frame (new frame%
+  (let* ((g (game (make-shadow) player1 player2 player1 '()))
+         (frame (new frame%
                      [label "To knot or not to knot"]
                      [width 600]
                      [height 450]))
@@ -792,8 +814,7 @@
          (canvas
           (new kg-canvas%
                [parent frame]
-               [aknot (make-shadow)]
-               [2nd-player-play 2nd-player-play]))
+               [agame g]))
          (menu-game (new menu%
               (label (localized-template 'knot 'Game))
               (parent menu-bar)))
@@ -802,13 +823,25 @@
                [label (localized-template 'knot 'New_game)]
                [parent menu-game]
                [callback 
-                (lambda (mi ce) 
-                  ((class-field-mutator kg-canvas% mknot) 
-                   canvas (make-shadow))
-                  ((class-field-mutator kg-canvas% circle) 
-                   canvas '())
-                  )])))                             
+                (lambda (mi ce)
+                  (let1 g
+                        (game (make-shadow) 
+                                player1 
+                                player2 
+                                player1 
+                                (lambda (k) (send canvas solve)))
+                        ((class-field-mutator kg-canvas% circle) 
+                         canvas '())
+                        ((class-field-mutator kg-canvas% game) 
+                         canvas g)
+                        ((class-field-mutator kg-canvas% mknot) 
+                         canvas (game-knot g))
+                        (send canvas refresh)
+                        (game-start g)
+                        ))])))
+    (set-game-solver! g (lambda (k) (send canvas solve)))
+    (game-start g)
     (send frame show #t)
     frame))
 
-(define frame (start 2-players-play make-shadow-7-4 'fr))
+(define frame (start 2-players-play 2-players-play make-shadow-7-4 'fr))

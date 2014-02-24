@@ -515,7 +515,32 @@
     (knot-fill-path! res)
     res))
 
+(define (knot-copy k)
+  (let1 res (apply make-naked-knot (map path-node-z (knot-path-nodes k)))
+        (map knot-node-copy-over
+             (knot-knot-nodes res)
+             (knot-knot-nodes k))
+        res))
 
+(define (knot-play-first k kn)
+  (let* ((res (knot-copy k))
+         (z (knot-node-z kn))
+         (res-kn (knot-nearest-node (real z) (imag z) res)))
+    (set-knot-node-over! res-kn (knot-node-first-path-node res-kn))
+    res))
+         
+        (set-knot-node-over
+
+(define (knot-0? k)
+  (if (knot-8? k)
+      #t
+      (let1 p1 (knot-detect-loop k)
+            (if p1
+                (knot-0? (knot-remove-pattern k p1))
+                (let1 p2 (knot-detect-pattern-2 k)
+                      (if p2
+                          (knot-0? (knot-remove-pattern k p2))
+                          #f))))))
 
 
 ;(define z1 100+200i)
@@ -621,13 +646,42 @@
 
 
 
+(define (knotter-play g)
+  (let1 k (game-knot g)
+        (if (knot-game-over? k)
+            (not (knot-0? k))
+            '())))
 
 
+(define (game-knotting? g)
+  (let1 k (game-knot g)
+        (if (knot-game-over? k)
+            (not (knot-0? k))
+            (let* ((kns (filter (lambda (kn) (equal? 'none (knot-node-over)))
+                                (knot-knot-nodes k)))
+                   (kn-f-gs (filter (lambda (kn-f-g) (not (game-unknotting? (caddr kn-f-g))))
+                                    (append (map (lambda (kn)
+                                                   (list kn knot-node-first-path-node (game-play-first g kn))) 
+                                                 kns)
+                                            (map (lambda (kn)
+                                                   (list kn knot-node-second-path-node (game-play-second g kn))) 
+                                                 kns)))))
+              kn-f-gs))))
 
-
-
-
-
+(define (game-unknotting? g)
+  (let1 k (game-knot g)
+        (if (knot-game-over? k)
+            (knot-0? k)
+            (let* ((kns (filter (lambda (kn) (equal? 'none (knot-node-over)))
+                                (knot-knot-nodes k)))
+                   (kn-f-gs (filter (lambda (kn-f-g) (not (game-knotting? (caddr kn-f-g))))
+                                    (append (map (lambda (kn)
+                                                   (list kn knot-node-first-path-node (game-play-first g kn))) 
+                                                 kns)
+                                            (map (lambda (kn)
+                                                   (list kn knot-node-second-path-node (game-play-second g kn))) 
+                                                 kns)))))
+              kn-f-gs))))
 
 (define (dumb-computer-play g)
   (let* ((k (game-knot g))
@@ -781,11 +835,11 @@
             (p2
              (send this blink
                    (λ (dc)
-                   (let ((kn1 (path-node-parent (car p2)))
-                         (kn2 (path-node-parent (cadr p2))))
-                     (w/pen dc "yellow" 20 'solid  
-                            (draw-z-point dc (knot-node-z kn1))
-                            (draw-z-point dc (knot-node-z kn2))))))
+                     (let ((kn1 (path-node-parent (car p2)))
+                           (kn2 (path-node-parent (cadr p2))))
+                       (w/pen dc "yellow" 20 'solid  
+                              (draw-z-point dc (knot-node-z kn1))
+                              (draw-z-point dc (knot-node-z kn2))))))
            (set! mknot (knot-remove-pattern mknot p2))
            (send this refresh)
            (send this solve)))))      

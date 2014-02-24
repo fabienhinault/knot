@@ -523,13 +523,19 @@
         res))
 
 (define (knot-play-first k kn)
+  (knot-play k kn knot-node-first-path-node))
+         
+
+(define (knot-play-second k kn)
+  (knot-play k kn knot-node-second-path-node))
+
+(define (knot-play k kn f)
   (let* ((res (knot-copy k))
          (z (knot-node-z kn))
-         (res-kn (knot-nearest-node (real z) (imag z) res)))
-    (set-knot-node-over! res-kn (knot-node-first-path-node res-kn))
+         (res-kn (knot-nearest-node (real-part z) (imag-part z) res)))
+    (set-knot-node-over! res-kn (f res-kn))
     res))
          
-        (set-knot-node-over
 
 (define (knot-0? k)
   (if (knot-8? k)
@@ -644,44 +650,42 @@
        (game-player2 g)
        (game-player1 g))))
 
-
+(define (x-knotter-play g p?)
+  (let* ((k (game-knot g))
+         (sols (p? k)))
+    (if sols
+        (random-list-ref sols)
+        (random-computer-play g))))
 
 (define (knotter-play g)
-  (let1 k (game-knot g)
-        (if (knot-game-over? k)
-            (not (knot-0? k))
-            '())))
+  (x-knotter-play g knot-knotting?))
 
+(define (unknotter-play g)
+  (x-knotter-play g knot-unknotting?))
 
-(define (game-knotting? g)
-  (let1 k (game-knot g)
-        (if (knot-game-over? k)
-            (not (knot-0? k))
-            (let* ((kns (filter (lambda (kn) (equal? 'none (knot-node-over)))
-                                (knot-knot-nodes k)))
-                   (kn-f-gs (filter (lambda (kn-f-g) (not (game-unknotting? (caddr kn-f-g))))
-                                    (append (map (lambda (kn)
-                                                   (list kn knot-node-first-path-node (game-play-first g kn))) 
-                                                 kns)
-                                            (map (lambda (kn)
-                                                   (list kn knot-node-second-path-node (game-play-second g kn))) 
-                                                 kns)))))
-              kn-f-gs))))
+(define (knot-xknotting? k complement)
+  (let* ((kns (filter (lambda (kn) (equal? 'none (knot-node-over kn)))
+                      (knot-knot-nodes k)))
+         (kn-f-gs (filter (lambda (kn-f-g) (not (complement (caddr kn-f-g))))
+                          (append-map
+                           (lambda (ff)
+                             (map (lambda (kn)
+                                    (list kn ff (knot-play k kn ff)))
+                                  kns))
+                           (list knot-node-first-path-node knot-node-second-path-node)))))
+    kn-f-gs))
+  
 
-(define (game-unknotting? g)
-  (let1 k (game-knot g)
-        (if (knot-game-over? k)
-            (knot-0? k)
-            (let* ((kns (filter (lambda (kn) (equal? 'none (knot-node-over)))
-                                (knot-knot-nodes k)))
-                   (kn-f-gs (filter (lambda (kn-f-g) (not (game-knotting? (caddr kn-f-g))))
-                                    (append (map (lambda (kn)
-                                                   (list kn knot-node-first-path-node (game-play-first g kn))) 
-                                                 kns)
-                                            (map (lambda (kn)
-                                                   (list kn knot-node-second-path-node (game-play-second g kn))) 
-                                                 kns)))))
-              kn-f-gs))))
+(define (knot-knotting? k)
+  (if (knot-game-over? k)
+      (not (knot-0? k))
+      (knot-xknotting? k knot-unknotting?)))
+
+(define (knot-unknotting? k)
+  (if (knot-game-over? k)
+      (knot-0? k)
+      (knot-xknotting? k knot-knotting?)))
+                               
 
 (define (dumb-computer-play g)
   (let* ((k (game-knot g))

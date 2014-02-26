@@ -171,6 +171,7 @@
         (magnitude (- (path-node-control-right pn) (path-node-z pn))))
      2))
 
+
 ;;;
 
 (struct knot-node (z first-path-node second-path-node over) #:mutable #:transparent)
@@ -515,12 +516,29 @@
     (knot-fill-path! res)
     res))
 
+;(define (knot-copy k)
+;  (let1 res (apply make-naked-knot (map path-node-z (knot-path-nodes k)))
+;        (map knot-node-copy-over
+;             (knot-knot-nodes res)
+;             (knot-knot-nodes k))
+;        res))
+
 (define (knot-copy k)
-  (let1 res (apply make-naked-knot (map path-node-z (knot-path-nodes k)))
-        (map knot-node-copy-over
-             (knot-knot-nodes res)
-             (knot-knot-nodes k))
-        res))
+  (let* ((pns (map (λ (pn) (struct-copy path-node pn [parent '()]))
+                   (knot-path-nodes k)))
+         (al-pns (map cons (knot-path-nodes k) pns))
+         (f-pns (λ (pn) (cdr (assoc pn (cons '(none . none) al-pns)))))
+         (kns (map (λ (kn) (struct-copy knot-node kn 
+                                        [first-path-node (f-pns (knot-node-first-path-node kn))]
+                                        [second-path-node (f-pns (knot-node-second-path-node kn))]
+                                        [over (f-pns (knot-node-over kn))]))
+                   (knot-knot-nodes k)))
+         (al-kns (map cons (knot-knot-nodes k) kns)))
+    (map (λ (pn-pair) (set-path-node-parent! (cdr pn-pair) (cdr (assoc (path-node-parent (car pn-pair)) al-kns))))
+         al-pns)
+    (knot kns pns '())))
+                                        
+        
 
 (define (knot-play-first k kn)
   (knot-play k kn knot-node-first-path-node))

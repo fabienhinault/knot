@@ -675,7 +675,8 @@
   (let* ((k (game-knot g))
          (sols (p? k)))
     (if sols
-        (random-list-ref sols)
+        (let1 sol (random-list-ref sols)
+              (game-play g (car sol) ((cadr sol) (car sol))))
         (random-computer-play g))))
 
 (define (knotter-play g)
@@ -687,16 +688,16 @@
 (define (knot-xknotting? k complement)
   (let* ((kns (filter (lambda (kn) (equal? 'none (knot-node-over kn)))
                       (knot-knot-nodes k)))
-         (kn-f-gs (filter (lambda (kn-f-g) (not (complement (caddr kn-f-g))))
+         (kn-f-ks (filter (lambda (kn-f-k) (not (complement (caddr kn-f-k))))
                           (append-map
                            (lambda (ff)
                              (map (lambda (kn)
                                     (list kn ff (knot-play k kn ff)))
                                   kns))
                            (list knot-node-first-path-node knot-node-second-path-node)))))
-    (if (null? kn-f-gs)
+    (if (null? kn-f-ks)
         #f
-        kn-f-gs)))
+        kn-f-ks)))
   
 
 (define (knot-knotting? k)

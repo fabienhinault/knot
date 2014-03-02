@@ -241,6 +241,9 @@
         pn2
         pn1)))
 
+(define (knot-node-none-over? kn)
+  (equal? 'none (knot-node-over kn)))
+
 ;;;
 ;knot
 
@@ -691,7 +694,9 @@
                                     (list kn ff (knot-play k kn ff)))
                                   kns))
                            (list knot-node-first-path-node knot-node-second-path-node)))))
-    kn-f-gs))
+    (if (null? kn-f-gs)
+        #f
+        kn-f-gs)))
   
 
 (define (knot-knotting? k)
@@ -704,6 +709,26 @@
       (knot-0? k)
       (knot-xknotting? k knot-knotting?)))
                                
+
+(let* ((k0 (make-shadow-trefoil))
+       (k1 (knot-play k0 (car (knot-knot-nodes k0)) knot-node-first-path-node))
+       (kn1 (findf knot-node-none-over? (knot-knot-nodes k1)))
+       (k2 (knot-play k1 kn1 knot-node-first-path-node))
+       (kn2 (findf knot-node-none-over? (knot-knot-nodes k2)))
+       (k3 (knot-play k2 kn2 knot-node-first-path-node)))
+  (check-equal?
+   #t
+   (knot-unknotting? k3))
+  (check-equal?
+   #f
+   (knot-knotting? k3))
+  (check-equal?
+   2
+   (length (knot-unknotting? k2)))
+  (check-equal?
+   #f
+   (knot-knotting? k0))
+  )
 
 (define (dumb-computer-play g)
   (let* ((k (game-knot g))

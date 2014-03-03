@@ -349,18 +349,26 @@
              (set-path-node-parent! (car pnodes2) knode)
              knode))))
   
-  (define (make-knot-nodes pnodes)
-    (cond ((null? pnodes) '())
-          ((not (null? (path-node-parent (car pnodes))))
-           (make-knot-nodes (cdr pnodes)))
-          (else        
-           (cons (make-knot-node pnodes) 
-                 (make-knot-nodes (cdr pnodes))))))
+;  (define (make-knot-nodes pnodes)
+;    (cond ((null? pnodes) '())
+;          ((not (null? (path-node-parent (car pnodes))))
+;           (make-knot-nodes (cdr pnodes)))
+;          (else        
+;           (cons (make-knot-node pnodes) 
+;                 (make-knot-nodes (cdr pnodes))))))
+  
+  (define (make-knot-nodes pnodes knodes)
+    (cond ((null? pnodes) knodes)
+          ((findf (lambda (kn) (member (car pnodes) (knot-node-path-nodes kn)))
+                  knodes)
+           (make-knot-nodes (cdr pnodes) knodes))
+          (else
+           (make-knot-nodes (cdr pnodes) (cons (make-knot-node pnodes) knodes)))))
   
   (let* ((path-nodes (map 
                      (lambda (z) (path-node z '() '() '() '() '() '() '()))
                      points)))
-    (knot (make-knot-nodes path-nodes) path-nodes '())))
+    (knot (make-knot-nodes path-nodes '()) path-nodes '())))
 
 
 ; many things borrowed from
@@ -456,6 +464,17 @@
     (findf (lambda (pns) (equal? (path-node-parent (car pns)) (path-node-parent (cadr pns))))
            (map list pnodes (cycle-left-1 pnodes)))))
 
+(define (knot-detect-loop-knot-node k)
+  (let ((knodes (knot-knot-nodes k))
+        (pnodes (knot-path-nodes k)))
+        (findf 
+         (lambda (kn) 
+           (or (equal? (path-node-next (knot-node-first-path-node kn) pnodes)
+                       (knot-node-second-path-node kn))
+               (equal? (path-node-next (knot-node-second-path-node kn) pnodes)
+                       (knot-node-first-path-node kn))))
+         knodes)))
+
 (define (knot-detect-pattern-2 k)
   (let* ((pnodes (knot-path-nodes k))
          (pns-found (findf (lambda (pns) (path-node-pattern-2? pns pnodes))
@@ -463,6 +482,15 @@
     (if (not pns-found)
         #f
         (path-node-pattern-2? pns-found pnodes))))
+
+(define (knot-detect-pattern-2-knot-nodes k)
+  (let* ((knodes (knot-knot-nodes k))
+         (pnodes (knot-path-nodes k))
+         (kns-found (findf knot-node-pattern-2? knodes)))
+    kns-found))
+
+(define (knot-node-pattern-2? kn)
+  '())
 
 (define (path-node-pattern-2? pn1pn2 pns)
   (let* ((pn1 (car pn1pn2))

@@ -4,8 +4,9 @@
 (require racket/draw)
 (require math/matrix)
 (require rackunit)
-(require srfi/29)
-
+(require srfi/1) ; list-index
+(require srfi/26) ; cut cute
+(require srfi/29) ; l10n
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;syntaxes
@@ -189,9 +190,12 @@
      2))
 
 (define (path-node-parent pn kns)
-  (findf (λ (kn) (or (equal? pn (knot-node-first-path-node kn))
-                     (equal? pn (knot-node-second-path-node kn))))
+  (findf (cut knot-node-parent? <> pn)
          kns))
+
+(define (path-node-parent-index pn kns)
+  (list-index (cut knot-node-parent? <> pn) kns))
+
 
 ;;;
 
@@ -264,6 +268,10 @@
 
 (define (knot-node-none-over? kn)
   (equal? 'none (knot-node-over kn)))
+
+(define (knot-node-parent? kn pn)
+  (or (equal? pn (knot-node-first-path-node kn))
+      (equal? pn (knot-node-second-path-node kn))))
 
 ;;;
 ;knot
@@ -605,6 +613,18 @@
                           (knot-0? (knot-remove-pattern k p2))
                           #f))))))
 
+(define (knot-trace k)
+  (let1 kns (knot-knot-nodes k)
+        (map
+         (λ (pn)
+           (let* ([kn (path-node-parent pn kns)]
+                  [ikn (path-node-parent-index pn kns)]
+                  [over (knot-node-over kn)])
+             (cond ((equal? 'none over) ikn)
+                   ((equal? pn over) (cons ikn #t))
+                   (else (cons ikn #f)))))
+         (knot-path-nodes k))))
+
 
 ;(define z1 100+200i)
 ;(define z2 200+100i)
@@ -729,7 +749,7 @@
 ;cpu time: 79824 real time: 79840 gc time: 2092
 
 
-(define-memoized (knot-xknotting? k complement)
+(define (knot-xknotting? k complement)
   (let* ((kns (filter (lambda (kn) (equal? 'none (knot-node-over kn)))
                       (knot-knot-nodes k)))
          (kn-f-ks (filter (lambda (kn-f-k) (not (complement (caddr kn-f-k))))

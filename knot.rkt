@@ -19,6 +19,7 @@
 ;(provide make-shadow-trefoil)
 (provide knot-knotting?)
 (provide knot-unknotting?)
+(provide xknotting-results)
 (provide knot-draw)
 (provide knot-detect-pattern-2)
 (provide knot-detect-loop)
@@ -465,29 +466,41 @@
   (check-not-false
    (knot-detect-pattern-2 k)))
 
-(let* ((k (make-shadow-7-4))
-       (kns (knot-knot-nodes k))
-       (kn0 (list-ref kns 0))
-       (kn2 (findf (lambda (kn) (equal? 200+300i (knot-node-z kn))) kns)))
-  (set-knot-node-over! kn0 (knot-node-second-path-node kn0))
-  (set-knot-node-over! kn2 (knot-node-first-path-node kn2))
+(let* ([k (make-shadow-7-4)]
+       [kns (knot-knot-nodes k)]
+       [pns (knot-path-nodes k)]
+       [kn0 (findf (lambda (kn) (equal? 100+200i (knot-node-z kn))) kns)]
+       [pn01 (knot-node-first-path-node kn0)]
+       [pn02 (knot-node-second-path-node kn0)]
+       [pn11 (path-node-next pn01 pns)]
+       [kn1 (path-node-parent pn11 kns)])
+       
+  (set-knot-node-over! kn0 pn01)
+  (set-knot-node-over! kn1 pn11)
   (check-not-false
    (knot-detect-pattern-2 k)))
 
-
+(define xknotting-results (make-hash))
 (define (knot-xknotting? k complement)
+  (let1 args (list (knot-trace k) complement)
+        (when (not (hash-has-key? xknotting-results args))
+          (hash-set! xknotting-results args (knot-xknotting?-raw k complement)))
+        (hash-ref xknotting-results args)))
+
+(define (knot-xknotting?-raw k complement)
   (let* ((kns (filter (lambda (kn) (equal? 'none (knot-node-over kn)))
                       (knot-knot-nodes k)))
-         (kn-f-ks (filter (lambda (kn-f-k) (not (complement (caddr kn-f-k))))
+         (n-f-ks (filter (lambda (kn-f-k) (not (complement (caddr kn-f-k))))
                           (append-map
                            (lambda (ff)
                              (map (lambda (kn)
-                                    (list kn ff (knot-play k kn ff)))
+                                    (list (list-index (curry equal? kn) (knot-knot-nodes k))
+                                          ff (knot-play k kn ff)))
                                   kns))
                            (list knot-node-first-path-node knot-node-second-path-node)))))
-    (if (null? kn-f-ks)
+    (if (null? n-f-ks)
         #f
-        kn-f-ks)))
+        (map (cut take <> 2) n-f-ks))))
   
 
 (define (knot-knotting? k)

@@ -515,7 +515,7 @@
 ;    res))
 ;
 ;;(define (knot-copy k)
-;;  (let1 res (apply make-naked-knot (map path-node-z (knot-path-nodes k)))
+;;  (let1 res (apply make-naked-knot (map pathknot-knotting?-node-z (knot-path-nodes k)))
 ;;        (map knot-node-copy-over
 ;;             (knot-knot-nodes res)
 ;;             (knot-knot-nodes k))
@@ -682,8 +682,9 @@
   (let* ((k (game-knot g))
          (sols (p? k)))
     (if sols
-        (let1 sol (random-list-ref sols)
-              (game-play g (car sol) ((cadr sol) (car sol))))
+        (let* ([sol (random-list-ref sols)]
+               [knode (list-ref (knot-knot-nodes k) (car sol))])
+              (game-play g knode ((cadr sol) knode)))
         (random-computer-play g))))
 
 (define (knotter-play g)
@@ -724,7 +725,7 @@
                 knot-node-second-path-node)
              knode)))))
 
-(define (2-players-play k) '())
+(define (human-player-play k) '())
 
 (define (re-play)
   (eval (read)))
@@ -907,4 +908,7 @@
     (send frame show #t)
     frame))
 
-(define frame (start 2-players-play 2-players-play make-shadow-7-4 'fr))
+(define frame (start human-player-play human-player-play make-shadow-7-4 'fr))
+
+;(start human-player-play knotter-play make-shadow-7-4 'fr))
+;(start human-player-play unknotter-play make-shadow-7-4 'fr))

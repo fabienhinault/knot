@@ -512,7 +512,18 @@
   (if (knot-complete? k)
       (knot-0? k)
       (knot-xknotting? k knot-knotting?)))
-                               
+
+;without memoizing
+;(time (knot-knotting? (make-shadow-7-4)))
+;cpu time: 1576588 real time: 1578695 gc time: 68340
+
+; with raw memoizing
+;(time (knot-knotting? (make-shadow-7-4)))
+;cpu time: 79824 real time: 79840 gc time: 2092
+
+; with trace memoizing
+;(time (knot-knotting? (make-shadow-7-4)))
+;cpu time: 1464 real time: 1468 gc time: 180                               
 
 (let* ((k0 (make-shadow-trefoil))
        (k1 (knot-play k0 (car (knot-knot-nodes k0)) knot-node-first-path-node))

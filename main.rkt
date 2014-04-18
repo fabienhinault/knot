@@ -248,13 +248,17 @@
                               (New_game_etc . "New game...")
                               (Language . "Language")
                               (English . "English")
-                              (French . "French")))
+                              (French . "French")
+                              (Against_the_computer . "Against the computer")
+                              (2_players . "2 players")))
 (declare-bundle! '(knot fr) '((Game . "Jeu")
                               (New_game . "Nouvelle partie")
                               (New_game_etc . "Nouvelle partie...")
                               (Language . "Langue")
                               (English . "Anglais")
-                              (French . "Français")))
+                              (French . "Français")
+                              (Against_the_computer . "Contre l'ordinateur")
+                              (2_players . "2 joueurs")))
 
 (define (new-game player1 player2 make-shadow canvas)
   (let1 g (game (make-shadow) 
@@ -292,13 +296,26 @@
                [callback 
                 (lambda (mi ce)
                   (new-game player1 player2 make-shadow canvas))])]
-         [item-new-game-etc
+         [dialog-new-game
+          (new dialog% 
+               [label (localized-template 'knot 'New_game_etc)]
+               [parent frame])]
+         [radio-nb-players
+          (new radio-box%
+               [label ""]
+               [choices (list (localized-template 'knot 'Against_the_computer)
+                              (localized-template 'knot '2_players))]
+               [parent dialog-new-game])]
+         [item-new-game-etc 
           (new menu-item%
                [label (localized-template 'knot 'New_game_etc)]
                [parent menu-game]
                [callback 
                 (lambda (mi ce)
-                  (get-choices-from-user "toto" "le message" '("choix1" "choix2")))])]
+;                  (send dialog-new-game show #true))])]
+                  (get-choices-from-user (localized-template 'knot 'New_game_etc) "" 
+                                         (list (localized-template 'knot 'Against_the_computer)
+                                               (localized-template 'knot '2_players))))])]
          )
     (set-game-solver! g (lambda (k) (send canvas solve)))
     (game-start g)
@@ -307,5 +324,5 @@
 
 (define frame (start human-player-play human-player-play make-shadow-7-4 'fr))
 
-;(start human-player-play knotter-play make-shadow-7-4 'fr))
-;(start human-player-play unknotter-play make-shadow-7-4 'fr))
+;(start human-player-play knotter-play make-shadow-7-4 'fr)
+;(start human-player-play unknotter-play make-shadow-7-4 'fr)

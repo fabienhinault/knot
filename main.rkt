@@ -276,7 +276,11 @@
                               )
                  )
 
-(define (new-game player1 player2 make-shadow canvas)
+(define (new-game make-shadow
+                  canvas 
+                  #:old-game [old-game '()] 
+                  #:player1 [player1 (game-player1 old-game)] 
+                  #:player2 [player2 (game-player2 old-game)])
   (let1 g (game (make-shadow) 
                 player1 
                 player2 
@@ -287,6 +291,7 @@
         ((class-field-mutator kg-canvas% mknot) canvas (game-knot g))
         (send canvas refresh)
         (game-start g)
+        g
         ))
 
 (define (get-choice-tree-from-user title message choice-trees)
@@ -321,7 +326,7 @@
                [parent menu-game]
                [callback 
                 (lambda (mi ce)
-                  (new-game player1 player2 make-shadow canvas))])]
+                  (set! g (new-game make-shadow canvas #:old-game g)))])]
          [dialog-new-game
           (new dialog% 
                [label (localized-template 'knot 'New_game_etc)]
@@ -349,13 +354,13 @@
                             (list (list 'You_knot
                                         (λ ()
                                           (set! player-computer unknotter-play)
-                                          (new-game (fplayer1) (fplayer2) make-shadow canvas)))
+                                          (set! g (new-game make-shadow canvas #:player1 (fplayer1) #:player2 (fplayer2)))))
                                   (list 'You_do_NOT_knot
                                         (λ ()
                                           (set! player-computer knotter-play)
-                                          (new-game (fplayer1) (fplayer2) make-shadow canvas)))))
+                                          (set! g (new-game make-shadow canvas #:player1 (fplayer1) #:player2 (fplayer2)))))))
                       (list '2_players
-                            (λ () (new-game human-player-play human-player-play make-shadow canvas)))))]
+                            (λ () (set! g (new-game make-shadow canvas #:player1 human-player-play #:player2 human-player-play))))))]
          [item-new-game-etc 
           (new menu-item%
                [label (localized-template 'knot 'New_game_etc)]

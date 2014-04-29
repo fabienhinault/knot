@@ -250,7 +250,14 @@
                               (English . "English")
                               (French . "French")
                               (Against_the_computer . "Against the computer")
-                              (2_players . "2 players")))
+                              (2_players . "2 players")
+                              (Computer_starts . "Computer starts")
+                              (You_start . "You start")
+                              (You_knot . "You knot")
+                              (You_do_NOT_knot . "You do not knot")
+                              
+                              )
+                 )
 (declare-bundle! '(knot fr) '((Game . "Jeu")
                               (New_game . "Nouvelle partie")
                               (New_game_etc . "Nouvelle partie...")
@@ -258,7 +265,16 @@
                               (English . "Anglais")
                               (French . "Français")
                               (Against_the_computer . "Contre l'ordinateur")
-                              (2_players . "2 joueurs")))
+                              (2_players . "2 joueurs")
+                              (Computer_starts . "L'ordinateur commence")
+                              (You_start . "Vous commencez")
+                              
+                              (You_knot . "Vous nouez")
+                              (You_do_NOT_knot . "Vous dénouez")
+                              
+                              
+                              )
+                 )
 
 (define (new-game player1 player2 make-shadow canvas)
   (let1 g (game (make-shadow) 
@@ -272,6 +288,16 @@
         (send canvas refresh)
         (game-start g)
         ))
+
+(define (get-choice-tree-from-user title message choice-trees)
+  (when (not (null? choice-trees))
+    (let* ([current-tree (car choice-trees)]
+           [current-choice
+            (get-choices-from-user (localized-template 'knot title) message
+                                   (map (λ (m) (localized-template 'knot (car m))) current-tree))])
+      ((cadr (list-ref current-tree (car current-choice))))
+      (get-choice-tree-from-user title message (cddr (list-ref current-tree (car current-choice))))
+      (get-choice-tree-from-user title message (cdr choice-trees)))))
 
 (define (start player1 player2 make-shadow lang)
   (current-language lang)
@@ -306,16 +332,38 @@
                [choices (list (localized-template 'knot 'Against_the_computer)
                               (localized-template 'knot '2_players))]
                [parent dialog-new-game])]
+         [fplayer1 '()]
+         [fplayer2 '()]
+         [player-computer '()]
+         [new-game-choice-tree
+          (list (list (list 'Against_the_computer 
+                            (λ () '()) 
+                            (list (list 'Computer_starts 
+                                        (λ () 
+                                          (set! fplayer1 (λ () player-computer))
+                                          (set! fplayer2 (λ () human-player-play))))
+                                  (list 'You_start
+                                        (λ () 
+                                          (set! fplayer1 (λ () human-player-play))
+                                          (set! fplayer2 (λ () player-computer)))))
+                            (list (list 'You_knot
+                                        (λ ()
+                                          (set! player-computer unknotter-play)
+                                          (new-game (fplayer1) (fplayer2) make-shadow canvas)))
+                                  (list 'You_do_NOT_knot
+                                        (λ ()
+                                          (set! player-computer knotter-play)
+                                          (new-game (fplayer1) (fplayer2) make-shadow canvas)))))
+                      (list '2_players
+                            (λ () (new-game human-player-play human-player-play make-shadow canvas)))))]
          [item-new-game-etc 
           (new menu-item%
                [label (localized-template 'knot 'New_game_etc)]
                [parent menu-game]
                [callback 
                 (lambda (mi ce)
-;                  (send dialog-new-game show #true))])]
-                  (get-choices-from-user (localized-template 'knot 'New_game_etc) "" 
-                                         (list (localized-template 'knot 'Against_the_computer)
-                                               (localized-template 'knot '2_players))))])]
+                  (get-choice-tree-from-user 'New_game_etc "" new-game-choice-tree))])]
+         
          )
     (set-game-solver! g (lambda (k) (send canvas solve)))
     (game-start g)

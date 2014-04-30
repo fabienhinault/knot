@@ -368,6 +368,21 @@
                [callback 
                 (lambda (mi ce)
                   (get-choice-tree-from-user 'New_game_etc "" new-game-choice-tree))])]
+         [game-type-label
+          (list (list human-player-play human-player-play '2_players)
+                (list knotter-play human-player-play 'Against_computer 'You_do_NOT_knot)
+                (list human-player-play knotter-play 'Against_computer 'You_do_NOT_knot 'You_start)
+                (list unknotter-play human-player-play 'Against_computer 'You_knot)
+                (list human-player-play unknotter-play 'Against_computer 'You_knot 'You_start))]
+                
+                
+                
+                
+                )]
+         [status-bar
+          (new message%
+                     (parent frame)
+                     (label "Message"))]
          
          )
     (set-game-solver! g (lambda (k) (send canvas solve)))

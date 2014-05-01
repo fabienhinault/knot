@@ -11,6 +11,7 @@
 (require "path-node.rkt")
 (require "knot-node.rkt")
 (require "knot.rkt")
+(require "game.rkt")
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -35,85 +36,88 @@
 
 
 
-
-(define (random-list-ref l)
-  (let1 len (length l)
-        (list-ref l (random len))))
+;
+;(define (random-list-ref l)
+;  (let1 len (length l)
+;        (list-ref l (random len))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;
 
-(struct game
-  (knot
-   player1
-   player2
-   current-player
-   solver)
-  #:mutable
-  #:transparent)
-
-(define (game-start g)
-  ((game-current-player g) g))
-
-(define (game-play g knode pnode)
-  (set-knot-node-over! knode pnode)
-  (if (knot-complete? (game-knot g))
-      ((game-solver g) (game-knot g))
-      (begin
-        (change-game-current-player! g)
-        ((game-current-player g) g))))
-
-(define (change-game-current-player! g)
-  (set-game-current-player! 
-   g 
-   (if (equal? (game-player1 g) (game-current-player g))
-       (game-player2 g)
-       (game-player1 g))))
-
-(define (x-knotter-play g p?)
-  (let* ((k (game-knot g))
-         (sols (p? k)))
-    (if sols
-        (let* ([sol (random-list-ref sols)]
-               [knode (list-ref (knot-knot-nodes k) (car sol))])
-          (game-play g knode ((cadr sol) knode)))
-        (random-computer-play g))))
-
-(define (knotter-play g)
-  (x-knotter-play g knot-knotting?))
-
-(define (unknotter-play g)
-  (x-knotter-play g knot-unknotting?))
-
-
-
-
-(define (dumb-computer-play g)
-  (let* ((k (game-knot g))
-         (knode (findf (lambda (kn) (equal? (knot-node-over kn) 'none))
-                       (knot-knot-nodes k))))
-    (when knode
-      (game-play g knode (knot-node-first-path-node knode)))))
-
-(define (random-computer-play g)
-  (let* ((k (game-knot g))
-         (knode
-          (random-list-ref 
-           (filter 
-            (lambda (kn) (equal? (knot-node-over kn) 'none))
-            (knot-knot-nodes k)))))
-    (when knode
-      (game-play
-       g
-       knode 
-       ((if (equal? 0 (random 2))
-            knot-node-first-path-node
-            knot-node-second-path-node)
-        knode)))))
-
-(define (human-player-play k) '())
+;(struct game
+;  (knot
+;   player1
+;   player2
+;   current-player
+;   solver)
+;  #:mutable
+;  #:transparent)
+;
+;(define (game-start g)
+;  ((game-current-player g) g))
+;
+;(let1 observers
+;      '()
+;      (define (game-play g knode pnode)
+;        (set-knot-node-over! knode pnode)
+;        (if (knot-complete? (game-knot g))
+;            ((game-solver g) (game-knot g))
+;            (begin
+;              (change-game-current-player! g)
+;              ((game-current-player g) g)))
+;        (map apply observers)))
+;
+;(define (change-game-current-player! g)
+;  (set-game-current-player! 
+;   g 
+;   (if (equal? (game-player1 g) (game-current-player g))
+;       (game-player2 g)
+;       (game-player1 g))))
+;
+;(define (x-knotter-play g p?)
+;  (let* ((k (game-knot g))
+;         (sols (p? k)))
+;    (if sols
+;        (let* ([sol (random-list-ref sols)]
+;               [knode (list-ref (knot-knot-nodes k) (car sol))])
+;          (game-play g knode ((cadr sol) knode)))
+;        (random-computer-play g))))
+;
+;(define (knotter-play g)
+;  (x-knotter-play g knot-knotting?))
+;
+;(define (unknotter-play g)
+;  (x-knotter-play g knot-unknotting?))
+;
+;
+;
+;
+;(define (dumb-computer-play g)
+;  (let* ((k (game-knot g))
+;         (knode (findf (lambda (kn) (equal? (knot-node-over kn) 'none))
+;                       (knot-knot-nodes k))))
+;    (when knode
+;      (game-play g knode (knot-node-first-path-node knode)))))
+;
+;(define (random-computer-play g)
+;  (let* ((k (game-knot g))
+;         (knode
+;          (random-list-ref 
+;           (filter 
+;            (lambda (kn) (equal? (knot-node-over kn) 'none))
+;            (knot-knot-nodes k)))))
+;    (when knode
+;      (game-play
+;       g
+;       knode 
+;       ((if (equal? 0 (random 2))
+;            knot-node-first-path-node
+;            knot-node-second-path-node)
+;        knode)))))
+;
+;(define (human-player-play k) '())
 
 (define (re-play)
   (eval (read)))
@@ -138,6 +142,7 @@
            [knode '()]
            [pnode '()]
            [circle '()])
+    (add-game-play-observer (lambda () (send this refresh)))
     
     (define/override (on-paint)
       (let ((dc (send this get-dc)))
@@ -184,7 +189,7 @@
              (game-play game knode pnode)
              (set! pnode '())
              (set! knode '())
-             (send this refresh)
+             ;(send this refresh)
              )]
           )))
     
@@ -304,6 +309,17 @@
       (get-choice-tree-from-user title message (cddr (list-ref current-tree (car current-choice))))
       (get-choice-tree-from-user title message (cdr choice-trees)))))
 
+(define (game-status g)
+  (let1 game-status-messages
+        (list (list human-player-play human-player-play '2_players)
+              (list knotter-play human-player-play 'Against_computer 'You_do_NOT_knot)
+              (list human-player-play knotter-play 'Against_computer 'You_do_NOT_knot 'You_start)
+              (list unknotter-play human-player-play 'Against_computer 'You_knot)
+              (list human-player-play unknotter-play 'Against_computer 'You_knot 'You_start))
+        (cddr (findf (λ (l) (and (equal? (car l) (game-player1 g))
+                                 (equal? (cadr l) (game-player2 g))))
+                     game-status-messages))))
+
 (define (start player1 player2 make-shadow lang)
   (current-language lang)
   (let* ((g (game (make-shadow) player1 player2 player1 '()))
@@ -369,20 +385,15 @@
                 (lambda (mi ce)
                   (get-choice-tree-from-user 'New_game_etc "" new-game-choice-tree))])]
          [game-type-label
-          (list (list human-player-play human-player-play '2_players)
-                (list knotter-play human-player-play 'Against_computer 'You_do_NOT_knot)
-                (list human-player-play knotter-play 'Against_computer 'You_do_NOT_knot 'You_start)
-                (list unknotter-play human-player-play 'Against_computer 'You_knot)
-                (list human-player-play unknotter-play 'Against_computer 'You_knot 'You_start))]
-                
-                
-                
-                
-                )]
+          (map (λ (sym) (localized-template 'knot sym)) (game-status g))]
          [status-bar
           (new message%
-                     (parent frame)
-                     (label "Message"))]
+               [parent frame]
+               [label (foldl (λ (str1 str2) 
+                               (string-append 
+                                str1 " | " str2))
+                             (car game-type-label)
+                             (cdr game-type-label))])]
          
          )
     (set-game-solver! g (lambda (k) (send canvas solve)))

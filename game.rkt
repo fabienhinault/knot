@@ -16,7 +16,11 @@
 (provide dumb-computer-play)
 (provide random-computer-play)
 (provide human-player-play)
-
+(provide game-status)
+(provide global-game)
+(provide set-global-game!)
+(provide add-set-global-game-observer)
+(provide new-game)
 
 
 
@@ -94,3 +98,38 @@
         knode)))))
 
 (define (human-player-play k) '())
+
+(define (game-status g)
+  (let1 game-status-messages
+        (list (list human-player-play human-player-play '2_players)
+              (list knotter-play human-player-play 'Against_computer 'You_do_NOT_knot)
+              (list human-player-play knotter-play 'Against_computer 'You_do_NOT_knot 'You_start)
+              (list unknotter-play human-player-play 'Against_computer 'You_knot)
+              (list human-player-play unknotter-play 'Against_computer 'You_knot 'You_start))
+        (cddr (findf (λ (l) (and (equal? (car l) (game-player1 g))
+                                 (equal? (cadr l) (game-player2 g))))
+                     game-status-messages))))
+
+(define global-game (game (make-shadow-7-4) human-player-play human-player-play human-player-play '()))
+
+(define set-global-game-observers '())
+(define (add-set-global-game-observer f)
+  (set! set-global-game-observers
+        (cons f set-global-game-observers)))
+(define (set-global-game! g)
+  (set! global-game g)
+  (map (λ (f) (f)) set-global-game-observers))
+
+
+(define (new-game make-shadow
+                  #:old-game [old-game '()] 
+                  #:player1 [player1 (game-player1 old-game)] 
+                  #:player2 [player2 (game-player2 old-game)])
+  (let1 g (game (make-shadow) 
+                player1 
+                player2 
+                player1 
+                '())
+        (game-start g)
+        g
+        ))

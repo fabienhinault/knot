@@ -5,6 +5,7 @@
 (provide minf)
 (provide random-list-ref)
 (provide draw-z-line)
+(provide draw-z-point)
 
 (define (minf l f)
   (define (aux l f val res)
@@ -30,3 +31,7 @@
           (imag-part z-start)
           (real-part z-end)
           (imag-part z-end))))
+
+
+(define (draw-z-point dc z)
+  (send dc draw-point (real-part z) (imag-part z)))

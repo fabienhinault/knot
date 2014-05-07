@@ -15,6 +15,8 @@
 (provide unknotter-play)
 (provide dumb-computer-play)
 (provide random-computer-play)
+(provide network-play)
+(provide set-network-input-port!)
 (provide human-player-play)
 (provide game-status)
 (provide global-game)
@@ -56,6 +58,15 @@
        (game-player2 g)
        (game-player1 g))))
 
+(define-values
+  (network-play set-network-input-port!)
+  (let1 in '()
+        (values
+         (λ (g) ((read in) g))
+         (λ (new-in) (set! in new-in)))))
+
+
+
 (define (x-knotter-play g p?)
   (let* ((k (game-knot g))
          (sols (p? k)))
@@ -70,9 +81,6 @@
 
 (define (unknotter-play g)
   (x-knotter-play g knot-unknotting?))
-
-
-
 
 (define (dumb-computer-play g)
   (let* ((k (game-knot g))

@@ -1,6 +1,7 @@
 #lang racket
 (require "syntaxes.rkt")
 (require racket/match)
+(require racket/promise)
 
 (require rackunit)
 
@@ -11,25 +12,50 @@
 (define-struct (knot-shadow-insert-exception exn:fail:user)())
 
 (define (knot-shadow-insert e l [f? knot-shadow-insert?]  [=? equal?])
-  (let1 p (f? l)
+  (let1 p (delay (f? l))
         (cond [(null? l) (list e)]
               ; if e == (car l), jump 3 numbers if possible, to avoid same number too near
               [(and (=? (car l) e) (not (null? (cdr l))) (not (null? (cddr l)))) 
                (list* (car l) (cadr l) (caddr l)(knot-shadow-insert e (cdddr l) f? =?))]
               ; 1 elt list == e -> failure
-              [(and (=? (car l) e) (null? (cdr l))) (raise (make-knot-shadow-insert-exception "" (current-continuation-marks)))]
+              [(and (=? (car l) e) (null? (cdr l))) 
+               (raise (make-knot-shadow-insert-exception "" (current-continuation-marks)))]
               ; 1 elt list != e -> (e x) or (x e)
-              [(and (null? (cdr l)) p) (cons e l)]
-              [(and (null? (cdr l)) (not p)) (list (car l) e)]
+              [(and (null? (cdr l)) (force p)) (cons e l)]
+              [(and (null? (cdr l)) (not (force p))) (list (car l) e)]
               ; 2 elt list == (e x) -> failure
-              [(and (=? (car l) e) (null? (cddr l))) (raise (make-knot-shadow-insert-exception "" (current-continuation-marks)))]
+              [(and (=? (car l) e) (null? (cddr l))) 
+               (raise (make-knot-shadow-insert-exception "" (current-continuation-marks)))]
               ; second element == e -> send to the case "e == (car l)"
-              [(=? (cadr l) e) (cons (car l) (knot-shadow-insert e (cdr l) f? =?))]
-              [p (cons e l)]
+              [(=? (cadr l) e) 
+               (cons (car l) (knot-shadow-insert e (cdr l) f? =?))]
+              [(force p) (cons e l)]
               [else (cons (car l) (knot-shadow-insert e (cdr l) f? =?))])))
 
 (define (knot-shadow-insert? l)
   (< (random) (/ 1.0 (add1 (length l)))))
+
+(define test-knot-shadow-insert-modulo?
+    (λ (thresh)
+      (let* ([counter 0]
+             [threshold thresh])
+        (λ ( l)
+          (set! counter (add1 counter))
+          (if (equal? counter threshold)
+              (begin
+                (set! counter 0)
+                #t)
+              #f)))))
+
+(define test-knot-shadow-insert-list?
+    (λ (lb)
+      (let* ([current lb]
+             [fix lb])
+        (λ ( l)
+          (set! current (cdr current))
+          (when (equal? current '())
+                (set! current fix))
+               (car current)))))
 
 (define (knot-shadow-shuffle n [f? knot-shadow-insert?]  [=? equal?])
   (foldl (λ (e l)

@@ -33,17 +33,6 @@
 ;(provide 
 ;(provide 
 
-(define (cycle-left-1 l)
-  (append (cdr l) (list (car l))))
-(define left-cycle-1 cycle-left-1)
-(define (cycle-right-1 l)
-  (cons (last l) (drop-right l 1)))
-(define right-cycle-1 cycle-left-1)
-(define (cycle-map f l)
-  (map f (cycle-left-1 l)  l ))
-(define (cycle-map-minus l)
-  (cycle-map - l))
-
 
 (define (turnAngle chord1 chord2)
   (if (or (equal? 0 chord1) (equal? 0 chord2))

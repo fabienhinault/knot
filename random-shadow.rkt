@@ -123,12 +123,24 @@
              (equal? 1st n-1th)
              (equal? 2nd nth)))))
 
-(define (generate-random-shadow n xmax ymax)
-  (let* ([trace (knot-shadow-shuffle n)]
-         [zs (map (λ(_) (make-rectangular (* (random) xmax) (* (random) ymax)))
-                  (range n))])
-    '()))
+(define (generate-random-vertices n xmax ymax)
+  (map (λ(_) (make-rectangular (* (random) xmax) (* (random) ymax)))
+                  (range n)))
     
+(define (generate-random-shadow n xmax ymax dt)
+  (let* ([trace (knot-shadow-shuffle n)]
+         [zs (generate-random-vertices n xmax ymax)]
+         [edges (trace-edges trace n)])
+    (displayln trace)
+    (displayln zs)
+    (displayln edges)
+    (do () (#f)
+      (set! zs (update-positions dt zs edges n))
+      (displayln zs)
+      (read-line)
+      )))
+         
+
 (define (trace-edges trace n)
   (let* ([neighbours (map list (range n))]
          [edges (append (map list trace (left-cycle-1 trace))
@@ -141,23 +153,70 @@
                              <))))
          (range n))))
 
-(define (pushForce z1 z2)
+; repulsive force created by "by" on "on". 
+; The force has same direction as vector "by on"
+;
+;       by                   on
+;        .                    .----->
+;                                force (same dir. as (on - by))
+;
+(define (push-force on by)
   (let* ([charge 100000]
-         [d (- z1 z2)]
+         [d (- on by)]
          [l (magnitude d)])
     (if (> l 0)
-        (make-polar (/ charge l) (angle d))
+        (make-polar (/ charge (* l l)) (angle d))
         0)))
+(let* ([z1 1+i]
+       [z2 -1-i])
+  (check-equal?
+   (angle (push-force z1 z2)) 
+   (angle (- z1 z2))))
   
-(define (pullForce z1 z2)
+; attractive force created by "by" on "on".
+; The force has same direction as vector "on by"
+;
+;       by                   on
+;        .                <---.
+;                           force (same dir. as (by - on))
+;
+(define (pull-force on by)
   (let* ([stiffness 0.5])
-    (* stiffness (- z2 z1))))
+    (* stiffness (- by on))))
+
+(let* ([z1 1+i]
+       [z2 -1-i])
+  (check-equal?
+   (angle (pull-force z1 z2)) 
+   (angle (- z2 z1)))
+  (check-equal?
+   (angle (pull-force z1 z2)) 
+   (- (angle (push-force z1 z2)) pi)))
+  
+  
+
+(define (push-result zi zs)
+  (foldl + 0 (map (λ (z) (push-force zi z))
+                  zs)))
+
+(define (pull-result i zs edges)
+  (let* ([zi (list-ref zs i)])
+    (foldl + 0 (map (λ (z) (pull-force zi z))
+                    (map (λ (j) (list-ref zs j)) (assoc i edges))))))
 
 (define (velocity z1 z2 f dt)
   (* dt (f z1 z2)))
 
-(define (update-position dt i zs)
-  (let* ([vertex-pos (list-ref zs i)]
-         [push '()])
-    '()))
+(define (update-position dt i zs edges)
+  (let* ([zi (list-ref zs i)]
+         [push (foldl + 0 (map (λ (z) (push-force zi z))
+                               zs))]
+         [pull (foldl + 0 (map (λ (z) (pull-force zi z))
+                               (map (λ (j) (list-ref zs j)) (assoc i edges))))])
+    (+ zi (* dt (+ push pull)))))
+
+(define (update-positions dt zs edges n)
+  (map 
+   (λ (i) (update-position dt i zs edges))
+   (range n)))
          

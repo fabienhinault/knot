@@ -160,13 +160,29 @@
 ;        .                    .----->
 ;                                force (same dir. as (on - by))
 ;
+
+;(define (push-force on by)
+;  (let* ([charge 100000]
+;         [d (- on by)]
+;         [l (magnitude d)])
+;    (if (> l 0)
+;        (make-polar (/ charge (* l l)) (angle d))
+;        0)))
+;
+;(define (sqr-magnitude z)
+;  (let* ([r (real-part z)]
+;         [i (imag-part z)])
+;    (+ (* r r) (* i i))))
+
 (define (push-force on by)
-  (let* ([charge 100000]
-         [d (- on by)]
+  (let* ([d (- on by)]
          [l (magnitude d)])
-    (if (> l 0)
-        (make-polar (/ charge (* l l)) (angle d))
-        0)))
+    (cond  
+      [(>= l 200) (make-polar 2 (angle d))]
+      [(> l 0) (make-polar (- 200 l) (angle d))]
+      [else 0])))
+
+
 (let* ([z1 1+i]
        [z2 -1-i])
   (check-equal?
@@ -177,12 +193,11 @@
 ; The force has same direction as vector "on by"
 ;
 ;       by                   on
-;        .                <---.
-;                           force (same dir. as (by - on))
+;        .              <-----.
+;                        force (same dir. as (by - on))
 ;
 (define (pull-force on by)
-  (let* ([stiffness 0.5])
-    (* stiffness (- by on))))
+  (- by on))
 
 (let* ([z1 1+i]
        [z2 -1-i])
@@ -219,4 +234,27 @@
   (map 
    (λ (i) (update-position dt i zs edges))
    (range n)))
-         
+
+ 
+;(let* ([n 4]
+;         [zs (generate-random-vertices n 600 600)]
+;         [edges '((0 1) (1 0 2) (2 1 3) (3 2))]
+;         [dt 0.1]
+;         [frame (new frame%
+;                     [label ""]
+;                     [width 600]
+;                     [height 600])]
+;         [canvas (new canvas%
+;                      [parent frame]
+;                      [paint-callback
+;                       (λ (this dc)
+;                         (for ([z zs])
+;                           (send dc draw-point (real-part z) (imag-part z))))])])
+;    
+;    (displayln zs)
+;    (displayln edges)
+;    (send frame show #t)
+;    (do () (#f)
+;      (set! zs (update-positions dt zs edges n))
+;      (send canvas refresh)
+;      (sleep/yield 0.1)))

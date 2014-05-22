@@ -1,7 +1,6 @@
 #lang racket
 (require "syntaxes.rkt")
 (require "utils.rkt")
-(require racket/match)
 (require racket/promise)
 (require rackunit)
 
@@ -127,7 +126,7 @@
   (map (λ(_) (make-rectangular (* (random) xmax) (* (random) ymax)))
                   (range n)))
     
-(define (generate-random-shadow n xmax ymax dt)
+(define (generate-random-shadow n xmax ymax)
   (let* ([trace (knot-shadow-shuffle n)]
          [zs (generate-random-vertices n xmax ymax)]
          [edges (trace-edges trace n)])
@@ -135,7 +134,7 @@
     (displayln zs)
     (displayln edges)
     (do () (#f)
-      (set! zs (update-positions dt zs edges n))
+      (set! zs (update-positions zs edges n))
       (displayln zs)
       (read-line)
       )))
@@ -174,19 +173,30 @@
 ;         [i (imag-part z)])
 ;    (+ (* r r) (* i i))))
 
-(define (push-force on by)
+;(define (push-force on by)
+;  (let* ([d (- on by)]
+;         [l (magnitude d)])
+;    (cond  
+;      [(>= l 200) (make-polar 2 (angle d))]
+;      [(> l 0) (make-polar (- 200 l) (angle d))]
+;      [else 0])))
+
+(define ref-distance 100)
+(define low-value 2)
+
+; push must compensate pull around ref-distance
+(define (push on by amortizement)
   (let* ([d (- on by)]
          [l (magnitude d)])
     (cond  
-      [(>= l 200) (make-polar 2 (angle d))]
-      [(> l 0) (make-polar (- 200 l) (angle d))]
+      [(>= l (* 2 ref-distance)) (make-polar (/ low-value l) (angle d))]
+      [(> l 0) (make-polar (* amortizement (- (* 2 ref-distance) l)) (angle d))]
       [else 0])))
 
-
-(let* ([z1 1+i]
-       [z2 -1-i])
+(let* ([z1 100]
+       [z2 -100])
   (check-equal?
-   (angle (push-force z1 z2)) 
+   (angle (push z1 z2 .2)) 
    (angle (- z1 z2))))
   
 ; attractive force created by "by" on "on".
@@ -196,50 +206,51 @@
 ;        .              <-----.
 ;                        force (same dir. as (by - on))
 ;
-(define (pull-force on by)
-  (- by on))
+
+;(define (pull-force on by)
+;  (- by on))
+
+(define (pull on by amortizement)
+  (* amortizement (- by on)))
 
 (let* ([z1 1+i]
        [z2 -1-i])
   (check-equal?
-   (angle (pull-force z1 z2)) 
+   (angle (pull z1 z2 .2)) 
    (angle (- z2 z1)))
   (check-equal?
-   (angle (pull-force z1 z2)) 
-   (- (angle (push-force z1 z2)) pi)))
-  
-  
+   (angle (pull z1 z2 .2)) 
+   (- (angle (push z1 z2 .2)) pi)))
 
 (define (push-result zi zs)
-  (foldl + 0 (map (λ (z) (push-force zi z))
+  (foldl + 0 (map (λ (z) (push zi z))
                   zs)))
 
 (define (pull-result i zs edges)
   (let* ([zi (list-ref zs i)])
-    (foldl + 0 (map (λ (z) (pull-force zi z))
+    (foldl + 0 (map (λ (z) (pull zi z))
                     (map (λ (j) (list-ref zs j)) (assoc i edges))))))
 
 (define (velocity z1 z2 f dt)
   (* dt (f z1 z2)))
 
-(define (update-position dt i zs edges)
+(define (update-position i zs edges amortizement)
   (let* ([zi (list-ref zs i)]
-         [push (foldl + 0 (map (λ (z) (push-force zi z))
+         [push-res (foldl + 0 (map (λ (z) (push zi z amortizement))
                                zs))]
-         [pull (foldl + 0 (map (λ (z) (pull-force zi z))
+         [pull-res (foldl + 0 (map (λ (z) (pull zi z amortizement))
                                (map (λ (j) (list-ref zs j)) (assoc i edges))))])
-    (+ zi (* dt (+ push pull)))))
+    (+ zi push-res pull-res)))
 
-(define (update-positions dt zs edges n)
+(define (update-positions zs edges n amortizement)
   (map 
-   (λ (i) (update-position dt i zs edges))
+   (λ (i) (update-position i zs edges amortizement))
    (range n)))
 
- 
+;(require racket/gui) 
 ;(let* ([n 4]
 ;         [zs (generate-random-vertices n 600 600)]
-;         [edges '((0 1) (1 0 2) (2 1 3) (3 2))]
-;         [dt 0.1]
+;         [edges '((0 1 2) (1 0 2) (2 0 1 3) (3 2))]
 ;         [frame (new frame%
 ;                     [label ""]
 ;                     [width 600]
@@ -248,13 +259,48 @@
 ;                      [parent frame]
 ;                      [paint-callback
 ;                       (λ (this dc)
+;                         (send dc set-pen "black" 5 'solid)
 ;                         (for ([z zs])
 ;                           (send dc draw-point (real-part z) (imag-part z))))])])
-;    
+;    (for ([i (range 50)])
+;      (set! zs (update-positions zs edges n 0.1)))
+;    (send frame show #t))
+
+;(let* ([n 4]
+;         [zs (generate-random-vertices n 600 600)]
+;         [edges '((0 1 2) (1 0 2) (2 0 1 3) (3 2))])
 ;    (displayln zs)
 ;    (displayln edges)
-;    (send frame show #t)
 ;    (do () (#f)
-;      (set! zs (update-positions dt zs edges n))
-;      (send canvas refresh)
-;      (sleep/yield 0.1)))
+;      (set! zs (update-positions zs edges n))
+;      (displayln zs)
+;      (read-line)))
+
+
+;(let* ([n 4]
+;         [zs (generate-random-vertices n 600 600)]
+;         [edges '((0 1 2) (1 0 2) (2 0 1 3) (3 2))]
+;         [frame (new frame%
+;                     [label ""]
+;                     [width 600]
+;                     [height 600])]
+;         [canvas (new canvas%
+;                      [parent frame]
+;                      [paint-callback
+;                       (λ (this dc)
+;                         (send dc set-pen "black" 5 'solid)
+;                         (for ([z zs])
+;                           (send dc draw-point (real-part z) (imag-part z)))
+;                         (send dc set-pen "black" 1 'solid)
+;                         (for ([edge edges])
+;                           (let ([start (list-ref zs (car edge))])
+;                             (for ([end (cdr edge)])
+;                               (send dc draw-line
+;                                     (real-part start)
+;                                     (imag-part start)
+;                                     (real-part (list-ref zs end))
+;                                     (imag-part (list-ref zs end))))))
+;                         )])])
+;    (for ([i (range 50)])
+;      (set! zs (update-positions zs edges n 0.1)))
+;    (send frame show #t))

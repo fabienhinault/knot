@@ -17,6 +17,7 @@
 (provide random-computer-play)
 (provide network-play)
 (provide set-network-input-port!)
+(provide accept-invitation)
 (provide human-player-play)
 (provide game-status)
 (provide global-game)
@@ -65,7 +66,8 @@
          (λ (g) ((read in) g))
          (λ (new-in) (set! in new-in)))))
 
-
+(define (accept-invitation)
+  '(()()))
 
 (define (x-knotter-play g p?)
   (let* ((k (game-knot g))
@@ -106,6 +108,8 @@
         knode)))))
 
 (define (human-player-play k) '())
+
+(define (network-player k) '())
 
 (define (game-status g)
   (let1 game-status-messages

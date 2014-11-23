@@ -55,23 +55,8 @@
                               (You_knot . "Vous nouez")
                               (You_do_NOT_knot . "Vous dénouez")
                               
-                              
                               )
                  )
-
-
-(define (get-choice-tree-from-user title message choice-trees)
-  (when (not (null? choice-trees))
-    (let* ([current-tree (car choice-trees)]
-           [current-choice
-            (get-choices-from-user (localized-template 'knot title) message
-                                   (map (λ (m) (localized-template 'knot (car m))) current-tree))])
-      ((cadr (list-ref current-tree (car current-choice))))
-      (get-choice-tree-from-user title message (cddr (list-ref current-tree (car current-choice))))
-      (get-choice-tree-from-user title message (cdr choice-trees)))))
-
-
-
 
 (define (start player1 player2 make-shadow lang)
   (current-language lang)

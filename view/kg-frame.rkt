@@ -63,23 +63,71 @@
 ;                                         #:player1 (car players)
 ;                                         #:player2 (cdr players))))))))))))
 
+(define al-players-user-choices
+  `(((Against_the_computer Computer_starts You_knot) . (,unknotter-play . ,human-player-play))
+    ((Against_the_computer Computer_starts You_do_NOT_knot) . (,knotter-play . ,human-player-play))
+    ((Against_the_computer You_start You_knot) . (,human-player-play . ,unknotter-play))
+    ((Against_the_computer You_start You_do_NOT_knot) . (,human-player-play . ,knotter-play))
+    ((2_players) . (,human-player-play . ,human-player-play))))
+
 (define (get-choices-from-user-l10n title message choices)
   (get-choices-from-user (localized-template 'knot title) 
                          (localized-template 'knot message)
-                         (map (λ (m) (localized-template 'knot 
-                                                         (car m)))
+                         (map (λ (m) (localized-template 'knot m))
                               choices)))
 
 (define (get-choice-tree-from-user title message choice-trees)
   (when (not (null? choice-trees))
     (let* ([current-tree (car choice-trees)]
+           [choices (map car current-tree)]
            [current-choice
-            (get-choices-from-user-l10n title message current-tree)])
+            (get-choices-from-user-l10n title message choices)])
       ((cadr (list-ref current-tree (car current-choice))))
       (get-choice-tree-from-user 
        title message (cddr (list-ref current-tree (car current-choice))))
       (get-choice-tree-from-user 
        title message (cdr choice-trees)))))
+
+
+(define new-game-choice-tree2
+  '(((Against_the_computer 
+      ((Computer_starts) (You_start))
+      ((You_knot) (You_do_NOT_knot)))
+     (2_players))))
+; choices-trees = new-game-choice-tree2
+; current-tree = '((Against_the_computer ...
+; choices = '(Against_the_computer 2_players)
+
+; current-choice = 1
+; (list-ref current-tree current-choice) = '(2_players ())
+
+; current-choice = 0
+; (list-ref current-tree current-choice) = '(Against_the_computer 
+;                                            (((Computer_starts) 
+;                                              (You_start))
+;                                             ((You_knot) (You_do_NOT_knot)))
+; choices-trees = '(((Computer_starts) (You_start))
+;                   ((You_knot) (You_do_NOT_knot)))
+; current-tree = '((Computer_starts) (You_start))
+
+(define (get-choice-tree-from-user2 title message choice-trees)
+  (if (null? choice-trees) 
+      '()
+      (let* ([current-tree (car choice-trees)]
+             [choices (map car current-tree)]
+             [current-choice
+              (car (get-choices-from-user-l10n title message choices))])
+         (cons
+          (list-ref choices current-choice)
+          (append
+           (get-choice-tree-from-user2
+            title message (cdr (list-ref current-tree current-choice)))
+           (get-choice-tree-from-user2
+            title message (cdr choice-trees)))))))
+
+(define (get-players-from-user-choices user-choices)
+  (assoc user-choices al-players-user-choices))
+
 
 (define kg-frame%
   (class frame%
@@ -96,7 +144,7 @@
            [label (localized-template 'knot 'New_game)]
            [parent menu-game]
            [callback 
-            (lambda (mi ce)
+            (λ (mi ce)
               (set-global-game! (new-game make-shadow-7-4 #:old-game global-game)))]))
     
     (define item-new-game-etc 
@@ -106,6 +154,21 @@
            [callback 
             (lambda (mi ce)
               (get-choice-tree-from-user 'New_game_etc "" new-game-choice-tree))]))
+
+    
+    (define item-new-game-etc2 
+      (new menu-item%
+           [label "New_game_etc 2"]
+           [parent menu-game]
+           [callback 
+            (λ (mi ce)
+              (let1 players
+                    (cdr (get-players-from-user-choices
+                     (get-choice-tree-from-user2 'New_game_etc "" new-game-choice-tree2)))
+                    (set-global-game! 
+                     (new-game make-shadow-7-4 
+                               #:player1 (car players)
+                               #:player2 (cdr players)))))]))
     
     (define status-bar
           (new message%

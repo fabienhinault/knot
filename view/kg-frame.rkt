@@ -10,42 +10,7 @@
  
 (provide kg-frame%)
 
-
 (define new-game-choice-tree
-  (let* ([fplayer1 '()]
-         [fplayer2 '()]
-         [player-computer '()])
-    (list 
-     (list 
-      (list 'Against_the_computer 
-            (λ () '()) 
-            (list 
-             (list 'Computer_starts 
-                   (λ () 
-                     (set! fplayer1 (λ () player-computer))
-                     (set! fplayer2 (λ () human-player-play))))
-             (list 'You_start
-                   (λ () 
-                     (set! fplayer1 (λ () human-player-play))
-                     (set! fplayer2 (λ () player-computer)))))
-            (list 
-             (list 'You_knot
-                   (λ ()
-                     (set! player-computer unknotter-play)
-                     (set-global-game! (new-game make-shadow-7-4 
-                                                 #:player1 (fplayer1) 
-                                                 #:player2 (fplayer2)))))
-             (list 'You_do_NOT_knot
-                   (λ ()
-                     (set! player-computer knotter-play)
-                     (set-global-game! (new-game make-shadow-7-4  
-                                                 #:player1 (fplayer1) 
-                                                 #:player2 (fplayer2)))))))
-      (list '2_players
-            (λ () (set-global-game! (new-game make-shadow-7-4  
-                                              #:player1 human-player-play 
-                                              #:player2 human-player-play))))))))
-(define new-new-game-choice-tree
   (let* ([fplayer1 '()]
          [fplayer2 '()]
          [player-computer '()])
@@ -75,38 +40,49 @@
        (2_players
         ,(λ () (set-global-game! (new-game make-shadow-7-4  
                                            #:player1 human-player-play 
-                                           #:player2 human-player-play))))
-       (over_network
-        ,(λ () '())
-        ((send_invitation
-          ,(λ () '())
-          ((Your_guest_starts
-            ,(λ ()
-               (set-global-game! (new-game make-shadow-7-4  
-                                         #:player1 network-play 
-                                         #:player2 human-player-play))))
-           (You_start
-            ,(λ ()
-               (set-global-game! (new-game make-shadow-7-4  
-                                         #:player1 human-player-play
-                                         #:player2 network-play))))))
-         (wait_invitation
-            ,(λ ()
-               (let ([players (accept-invitation)])
-                 (set-global-game! (new-game make-shadow-7-4  
-                                         #:player1 (car players)
-                                         #:player2 (cdr players))))))))))))
+                                           #:player2 human-player-play))))))))
 
+;       (over_network
+;        ,(λ () '())
+;        ((send_invitation
+;          ,(λ () '())
+;          ((Your_guest_starts
+;            ,(λ ()
+;               (set-global-game! (new-game make-shadow-7-4  
+;                                         #:player1 network-play 
+;                                         #:player2 human-player-play))))
+;           (You_start
+;            ,(λ ()
+;               (set-global-game! (new-game make-shadow-7-4  
+;                                         #:player1 human-player-play
+;                                         #:player2 network-play))))))
+;         (wait_invitation
+;            ,(λ ()
+;               (let ([players (accept-invitation)])
+;                 (set-global-game! (new-game make-shadow-7-4  
+;                                         #:player1 (car players)
+;                                         #:player2 (cdr players))))))))))))
+
+(define (get-choices-from-user-l10n title message choices)
+  (get-choices-from-user (localized-template 'knot title) 
+                         (localized-template 'knot message)
+                         (map (λ (m) (localized-template 'knot 
+                                                         (car m)))
+                              choices)))
 
 (define (get-choice-tree-from-user title message choice-trees)
   (when (not (null? choice-trees))
     (let* ([current-tree (car choice-trees)]
            [current-choice
             (get-choices-from-user (localized-template 'knot title) message
-                                   (map (λ (m) (localized-template 'knot (car m))) current-tree))])
+                                   (map (λ (m) (localized-template 'knot 
+                                                                   (car m)))
+                                        current-tree))])
       ((cadr (list-ref current-tree (car current-choice))))
-      (get-choice-tree-from-user title message (cddr (list-ref current-tree (car current-choice))))
-      (get-choice-tree-from-user title message (cdr choice-trees)))))
+      (get-choice-tree-from-user 
+       title message (cddr (list-ref current-tree (car current-choice))))
+      (get-choice-tree-from-user 
+       title message (cdr choice-trees)))))
 
 (define kg-frame%
   (class frame%

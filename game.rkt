@@ -16,7 +16,7 @@
 (provide dumb-computer-play)
 (provide random-computer-play)
 (provide network-play)
-(provide set-network-input-port!)
+(provide set-network-ports!)
 (provide accept-invitation)
 (provide human-player-play)
 (provide game-status)
@@ -52,6 +52,9 @@
       (map (lambda (f) (f)) observers))
      (lambda (f) (set! observers (cons f observers))))))
 
+(define (game-play-z g z)
+  '())
+
 (define (change-game-current-player! g)
   (set-game-current-player! 
    g 
@@ -60,18 +63,21 @@
        (game-player1 g))))
 
 (define-values
-  (network-play set-network-input-port!)
-  (let1 in '()
+  (network-play set-network-ports!)
+  (let* ([in '()]
+         [out '()])
         (values
-         (λ (g) ((read in) g))
-         (λ (new-in) (set! in new-in)))))
+         (λ (g) (game-play-z g (string->number (read in))))
+         (λ (new-in new-out) 
+           (set! in new-in)
+           (set! out new-out)))))
 
 (define (accept-invitation)
   '(()()))
 
-(define (x-knotter-play g p?)
+(define (x-knotter-play g predicate?)
   (let* ((k (game-knot g))
-         (sols (p? k)))
+         (sols (predicate? k)))
     (if sols
         (let* ([sol (random-list-ref sols)]
                [knode (list-ref (knot-knot-nodes k) (car sol))])
